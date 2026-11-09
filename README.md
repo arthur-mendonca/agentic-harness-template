@@ -13,9 +13,42 @@ Python 3.11–3.14, Windows e Linux. Sem dependências Python em tempo de execu�
 - `setup.py`: interface do instalador e compatibilidade com o backend de empacotamento.
 - `pyproject.toml`: metadados, comandos e empacotamento do código Python. Não há recursos externos que exijam `MANIFEST.in`.
 
-Esta fonte não contém `.gitignore`, conforme o fluxo de copiar sua estrutura. Wheels são saídas de build opcionais, guardadas em `.harness/wheels/`, sem uma pasta `dist/` na raiz. `build/`, `*.egg-info/`, `__pycache__/` e `.harness/` são artefatos locais de construção/verificação, não componentes a copiar para um consumidor. O instalador continua cuidando da regra `.harness/` no `.gitignore` do projeto de destino, preservando suas regras existentes.
+O `.gitignore` desta fonte exclui `/.harness/` do versionamento, incluindo evidências, projetos temporários e wheels. Wheels são saídas de build opcionais, guardadas em `.harness/wheels/`, sem uma pasta `dist/` na raiz. `build/`, `*.egg-info/`, `__pycache__/` e `.harness/` são artefatos locais de construção/verificação, não componentes a copiar para um consumidor. O instalador continua cuidando da regra `.harness/` no `.gitignore` do projeto de destino, preservando suas regras existentes.
 
-## Usar por cópia em um repositório existente
+## Instalação principal: pacote Python compartilhado
+
+Instale o harness diretamente do repositório Git, preferencialmente em um ambiente virtual ativo:
+
+```console
+python -m pip install "git+https://github.com/arthur-mendonca/agentic-harness-template.git"
+```
+
+Para manter a instalação reproduzível, substitua `<SHA_COMPLETO_DA_REVISAO>` pelo SHA completo de uma revisão existente e instale essa revisão específica:
+
+```console
+python -m pip install "git+https://github.com/arthur-mendonca/agentic-harness-template.git@<SHA_COMPLETO_DA_REVISAO>"
+```
+
+Registre a revisão escolhida conforme [distribuição e atualização controlada](#distribuição-e-atualização-controlada). Para instalar a partir de um checkout local, use `python -m pip install .` na raiz desta fonte.
+
+Prepare um repositório de destino já existente e confira os checks gerados:
+
+```console
+harness-setup init /caminho/meu-projeto
+cd /caminho/meu-projeto
+harness --validate
+harness --list
+```
+
+No Windows, substitua `/caminho/meu-projeto` por um caminho como `"C:\caminho\meu-projeto"`. O comando `init` cria `harness.json` na raiz do consumidor e os controles documentais descritos abaixo. Ajuste nesse arquivo os checks pendentes; depois, se houver um check `test` configurado, execute:
+
+```console
+harness --check test
+```
+
+O executor Python fica no ambiente em que o pacote foi instalado e pode atender diferentes repositórios, cada um com seu próprio `harness.json`. Não é necessário copiar `harness/` para os consumidores. `python -m harness.installer` e `python -m harness.runner` também estão disponíveis no mesmo ambiente. Atualizações são explícitas, conforme o procedimento de distribuição abaixo.
+
+## Alternativa: usar por cópia em um repositório existente
 
 Copie **somente a pasta `harness/`** para a raiz do projeto. Este modo requer Python 3.11–3.14, sem instalação via pip. No PowerShell, ajuste os caminhos para a fonte e para o repositório de destino:
 
@@ -60,21 +93,9 @@ O destino padrão é `~/.agents/skills/`, por exemplo `C:\Users\User\.agents\ski
 
 Não é necessário copiar `tests/`, `.github/`, `.harness/`, `skills/`, `pyproject.toml` ou `setup.py` desta fonte para usar o harness no consumidor. Neste modo, use `python -m harness.installer` e `python -m harness.runner` a partir da raiz do projeto. Para atualizar a cópia, compare as versões e as alterações da pasta `harness/`; preserve o `harness.json` e os controles do consumidor e valide sua compatibilidade antes de executar checks.
 
-## Alternativa: instalar como pacote Python
+## Comportamento do instalador de projetos
 
-Na raiz deste checkout, preferencialmente em um ambiente virtual:
-
-```console
-python -m pip install .
-python setup.py "C:\caminho\meu-projeto"
-```
-
-Após instalar o pacote, também é possível preparar um diretório existente de qualquer localização:
-
-```console
-harness-setup init /caminho/meu-projeto
-python -m harness.installer init /caminho/meu-projeto
-```
+O mesmo instalador é usado pelo pacote compartilhado e pela alternativa de cópia. No checkout desta fonte, `python setup.py "C:\caminho\meu-projeto"` também prepara o destino.
 
 O instalador inspeciona manifests, scripts e alvos reais. Reconhece linguagens e gerenciadores por manifests (Node, Python, Go, Rust, JVM, .NET, Ruby e PHP); frameworks são relatados quando declarados como dependências Node. Configura scripts Node `lint`, `types`/`typecheck`/`type-check`, `test` e `build`, ferramentas Python com configuração pytest/ruff/mypy e alvos explícitos de Makefile. Não infere comandos só pela linguagem. Instalações em monorepos inspecionam apenas a raiz informada; configure manualmente `cwd` e comandos dos subprojetos.
 
@@ -189,10 +210,10 @@ Falhas têm precedência sobre pendências. Estados de checks não selecionados 
 Versão inicial: `0.1.0`. A versão do pacote e das skills é mantida neste repositório; a versão do formato é independente. Fixe uma revisão Git completa **que contenha a versão desejada** em um arquivo de dependências dedicado ou equivalente:
 
 ```text
-agentic-verifiable-harness @ git+https://github.com/User-mendonca/agentic-harness-template.git@<SHA_COMPLETO_DA_REVISAO>
+agentic-verifiable-harness @ git+https://github.com/arthur-mendonca/agentic-harness-template.git@<SHA_COMPLETO_DA_REVISAO>
 ```
 
-Instale o arquivo com `python -m pip install -r requirements-harness.txt`. O SHA deve ser escolhido depois que a implementação estiver versionada pelo mantenedor; esta tarefa não cria commits nem pressupõe publicação no PyPI.
+Salve essa linha em `requirements-harness.txt`, substituindo o marcador pelo SHA completo escolhido, e instale com `python -m pip install -r requirements-harness.txt`. Use uma revisão existente que contenha a versão desejada; não é necessária publicação no PyPI.
 
 Para distribuição local reproduzível, construa e retenha o wheel e seu hash:
 
@@ -204,7 +225,13 @@ python -m pip install --no-deps .harness/wheels/agentic_verifiable_harness-0.1.0
 
 Registre o hash em seu mecanismo de dependências com verificação de integridade. Builds de source usam isolamento do pip e podem baixar setuptools; o wheel instalado não precisa desse build tool nem de rede.
 
-Para atualizar: selecione a nova revisão/wheel e versão, examine as mudanças, instale em ambiente separado, altere `harness_version` do consumidor intencionalmente, execute `--validate` e os checks relevantes. Instale skills atualizadas somente pela operação `skills --update`, examinando conflitos e backups. Instalar/atualizar o pacote não modifica configurações de consumidores nem skills globais. Não use uma referência móvel como única fixação de versão. A versão deve ser incrementada quando o conteúdo distribuído mudar.
+Para atualizar intencionalmente, selecione a nova revisão e examine as mudanças. Em um ambiente separado, substitua `<NOVO_SHA_COMPLETO>` pelo SHA completo escolhido e execute:
+
+```console
+python -m pip install --upgrade --force-reinstall "git+https://github.com/arthur-mendonca/agentic-harness-template.git@<NOVO_SHA_COMPLETO>"
+```
+
+`--force-reinstall` permite trocar de revisão mesmo quando o número da versão do pacote permanece igual. Atualize também a revisão registrada em `requirements-harness.txt`, se utilizado. Para wheels, selecione e instale o novo arquivo explicitamente. Ajuste `harness_version` do consumidor somente se a versão do pacote mudar; na raiz de cada consumidor, execute `harness --validate` e os checks relevantes, como `harness --check test`, antes de adotar a atualização. Instale skills atualizadas somente pela operação `skills --update`, examinando conflitos e backups. Instalar/atualizar o pacote não modifica configurações de consumidores nem skills globais. Não use uma referência móvel como única fixação de versão. A versão deve ser incrementada quando o conteúdo distribuído mudar.
 
 ## Verificação do pacote
 
