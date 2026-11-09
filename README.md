@@ -20,7 +20,7 @@ Esta fonte não contém `.gitignore`, conforme o fluxo de copiar sua estrutura. 
 Copie **somente a pasta `harness/`** para a raiz do projeto. Este modo requer Python 3.11–3.14, sem instalação via pip. No PowerShell, ajuste os caminhos para a fonte e para o repositório de destino:
 
 ```powershell
-$origem = "C:\Users\Arthur\Desktop\agentic-harness-template"
+$origem = "C:\Users\User\Desktop\agentic-harness-template"
 $projeto = "C:\caminho\meu-projeto"
 
 if (-not (Test-Path -LiteralPath $projeto -PathType Container)) {
@@ -56,7 +56,7 @@ As skills são copiadas separadamente para o computador, sem precisar colocá-la
 python -m harness.installer skills --source (Join-Path $origem "skills")
 ```
 
-O destino padrão é `~/.agents/skills/`, por exemplo `C:\Users\Arthur\.agents\skills`. A operação informa conflitos em skills existentes; veja [instalação e atualização das skills](#instalar-ou-atualizar-as-skills-globais) para escolher outro destino ou atualizar com backup.
+O destino padrão é `~/.agents/skills/`, por exemplo `C:\Users\User\.agents\skills`. A operação informa conflitos em skills existentes; veja [instalação e atualização das skills](#instalar-ou-atualizar-as-skills-globais) para escolher outro destino ou atualizar com backup.
 
 Não é necessário copiar `tests/`, `.github/`, `.harness/`, `skills/`, `pyproject.toml` ou `setup.py` desta fonte para usar o harness no consumidor. Neste modo, use `python -m harness.installer` e `python -m harness.runner` a partir da raiz do projeto. Para atualizar a cópia, compare as versões e as alterações da pasta `harness/`; preserve o `harness.json` e os controles do consumidor e valide sua compatibilidade antes de executar checks.
 
@@ -103,10 +103,10 @@ Esta é uma operação separada e explícita:
 ```console
 python -m harness.installer skills
 python -m harness.installer skills --update
-python -m harness.installer skills --source "C:\caminho\harness-fonte\skills" --destination "C:\Users\Arthur\.agents\skills"
+python -m harness.installer skills --source "C:\caminho\harness-fonte\skills" --destination "C:\Users\User\.agents\skills"
 ```
 
-O destino padrão é `~/.agents/skills/` (por exemplo `C:\Users\Arthur\.agents\skills`). No checkout, a origem padrão é sua pasta `skills/`; ao usar apenas o pacote Python instalado, informe `--source CAMINHO` para a pasta de skills da fonte, ou copie manualmente as cinco pastas. O pacote não procura nem carrega skills ao executar checks ou preparar projetos.
+O destino padrão é `~/.agents/skills/` (por exemplo `C:\Users\User\.agents\skills`). No checkout, a origem padrão é sua pasta `skills/`; ao usar apenas o pacote Python instalado, informe `--source CAMINHO` para a pasta de skills da fonte, ou copie manualmente as cinco pastas. O pacote não procura nem carrega skills ao executar checks ou preparar projetos.
 
 `--destination CAMINHO` permite outro destino, inclusive `~/.codex/skills/` quando esse for o caminho escolhido na máquina. Conteúdos iguais são preservados; conteúdos diferentes são relatados como conflitos. Somente `--update` substitui `SKILL.md`, mantendo uma cópia `SKILL.md.backup-<identificador>` e os demais arquivos da skill. Os testes sempre usam destinos temporários e não alteram as skills globais.
 
@@ -164,23 +164,23 @@ Também estão disponíveis `harness --check test` e `--project CAMINHO` para in
 
 Cada execução gera `.harness/results/<UTC-identificador>.json` e `.log`, com versão, seleção, início/fim, comando, diretório, timeout, duração, retorno, stdout e stderr. Saídas são decodificadas como UTF-8, substituindo bytes inválidos. `--list` e `--validate` são inspeções e não geram evidência de execução. Erros de configuração são apresentados antes de qualquer comando. JSON e logs são locais e ignorados pelo Git.
 
-| Estado de resultado | Significado |
-| --- | --- |
-| `passed` | Comando executado, retorno zero |
-| `failed` | Retorno diferente de zero ou falha ao iniciar o comando |
-| `timeout` | Limite excedido, com saída parcial e término do processo |
-| `not_applicable` | Inaplicabilidade declarada, com motivo |
-| `unconfigured` | Pendente de configuração, com motivo |
-| `not_run` | Check configurado, mas não selecionado |
+| Estado de resultado | Significado                                              |
+| ------------------- | -------------------------------------------------------- |
+| `passed`            | Comando executado, retorno zero                          |
+| `failed`            | Retorno diferente de zero ou falha ao iniciar o comando  |
+| `timeout`           | Limite excedido, com saída parcial e término do processo |
+| `not_applicable`    | Inaplicabilidade declarada, com motivo                   |
+| `unconfigured`      | Pendente de configuração, com motivo                     |
+| `not_run`           | Check configurado, mas não selecionado                   |
 
 O timeout encerra o grupo de processos no Linux e usa `taskkill /T /F` no Windows, com fallback para o processo direto. Processos que deliberadamente se destacam do grupo podem escapar; o harness não é um sandbox de execução.
 
-| Saída | Executor | Instalador |
-| --- | --- | --- |
-| `0` | Selecionados aprovados ou explicitamente inaplicáveis; também inspeção válida | Instalação válida, podendo conter checks pendentes |
-| `1` | Algum selecionado falhou ou excedeu timeout | — |
-| `2` | Configuração, versão, caminho, argumentos ou erro de I/O | Argumentos, caminho, formato ou incompatibilidade |
-| `3` | Nenhum selecionado ou algum selecionado não configurado | Conflitos de skills preservados sem `--update` |
+| Saída | Executor                                                                      | Instalador                                         |
+| ----- | ----------------------------------------------------------------------------- | -------------------------------------------------- |
+| `0`   | Selecionados aprovados ou explicitamente inaplicáveis; também inspeção válida | Instalação válida, podendo conter checks pendentes |
+| `1`   | Algum selecionado falhou ou excedeu timeout                                   | —                                                  |
+| `2`   | Configuração, versão, caminho, argumentos ou erro de I/O                      | Argumentos, caminho, formato ou incompatibilidade  |
+| `3`   | Nenhum selecionado ou algum selecionado não configurado                       | Conflitos de skills preservados sem `--update`     |
 
 Falhas têm precedência sobre pendências. Estados de checks não selecionados continuam visíveis, mas não reprovam a seleção. Saída zero nunca implica que todos os checks do projeto foram executados; examine os estados individuais. Interrupções externas não produzem relatório de execução completa.
 
@@ -189,7 +189,7 @@ Falhas têm precedência sobre pendências. Estados de checks não selecionados 
 Versão inicial: `0.1.0`. A versão do pacote e das skills é mantida neste repositório; a versão do formato é independente. Fixe uma revisão Git completa **que contenha a versão desejada** em um arquivo de dependências dedicado ou equivalente:
 
 ```text
-agentic-verifiable-harness @ git+https://github.com/arthur-mendonca/agentic-harness-template.git@<SHA_COMPLETO_DA_REVISAO>
+agentic-verifiable-harness @ git+https://github.com/User-mendonca/agentic-harness-template.git@<SHA_COMPLETO_DA_REVISAO>
 ```
 
 Instale o arquivo com `python -m pip install -r requirements-harness.txt`. O SHA deve ser escolhido depois que a implementação estiver versionada pelo mantenedor; esta tarefa não cria commits nem pressupõe publicação no PyPI.
