@@ -1,0 +1,55 @@
+Harness 0.1.0 | agentic-harness-template | 20261109T143101.567179Z-3b13cf56
+Selected: test
+
+test: passed (4.099369s) returncode=0
+command=["python", "-m", "unittest", "discover", "-s", "tests", "-v"] cwd=C:\Users\Arthur\Desktop\agentic-harness-template
+stdout:
+
+stderr:
+test_invalid_configurations (test_config.ConfigurationTests.test_invalid_configurations) ... ok
+test_link_cannot_escape_project_working_directory (test_config.ConfigurationTests.test_link_cannot_escape_project_working_directory) ... ok
+test_malformed_and_duplicate_json (test_config.ConfigurationTests.test_malformed_and_duplicate_json) ... ok
+test_valid_configuration_does_not_require_conventional_checks (test_config.ConfigurationTests.test_valid_configuration_does_not_require_conventional_checks) ... ok
+test_copied_runtime_and_templates_work_without_any_skills (test_distribution.DistributionTests.test_copied_runtime_and_templates_work_without_any_skills) ... ok
+test_wheel_installs_resources_and_runs_outside_checkout (test_distribution.DistributionTests.test_wheel_installs_resources_and_runs_outside_checkout) ... ok
+test_ambiguous_managers_and_placeholder_test_stay_pending (test_installer.InstallerTests.test_ambiguous_managers_and_placeholder_test_stay_pending) ... ok
+test_conflicting_file_in_directory_position_causes_no_partial_install (test_installer.InstallerTests.test_conflicting_file_in_directory_position_causes_no_partial_install) ... ok
+test_default_skill_destination_is_agents_skills_in_user_home (test_installer.InstallerTests.test_default_skill_destination_is_agents_skills_in_user_home) ... ok
+test_empty_repository_and_idempotence (test_installer.InstallerTests.test_empty_repository_and_idempotence) ... ok
+test_existing_empty_gitignore_is_reported_as_updated (test_installer.InstallerTests.test_existing_empty_gitignore_is_reported_as_updated) ... ok
+test_existing_node_project_detects_real_scripts_without_running (test_installer.InstallerTests.test_existing_node_project_detects_real_scripts_without_running) ... ok
+test_explicit_skill_source_and_missing_source_preserve_destination (test_installer.InstallerTests.test_explicit_skill_source_and_missing_source_preserve_destination) ... ok
+test_gitignore_negation_cannot_leave_results_unignored (test_installer.InstallerTests.test_gitignore_negation_cannot_leave_results_unignored) ... ok
+test_invalid_existing_config_causes_no_partial_install (test_installer.InstallerTests.test_invalid_existing_config_causes_no_partial_install) ... ok
+test_invalid_path (test_installer.InstallerTests.test_invalid_path) ... ok
+test_linked_directory_cannot_modify_external_files (test_installer.InstallerTests.test_linked_directory_cannot_modify_external_files) ... ok
+test_malformed_manifest_does_not_trigger_partial_install (test_installer.InstallerTests.test_malformed_manifest_does_not_trigger_partial_install) ... ok
+test_preserves_instructions_plans_tasks_config_and_gitignore (test_installer.InstallerTests.test_preserves_instructions_plans_tasks_config_and_gitignore) ... ok
+test_python_tool_configuration_and_make_targets (test_installer.InstallerTests.test_python_tool_configuration_and_make_targets) ... ok
+test_setup_entry_point (test_installer.InstallerTests.test_setup_entry_point) ... ok
+test_skills_are_explicit_and_updates_back_up_existing_content (test_installer.InstallerTests.test_skills_are_explicit_and_updates_back_up_existing_content) ... ok
+test_symlinked_skill_preserves_external_content (test_installer.InstallerTests.test_symlinked_skill_preserves_external_content) ... ok
+test_unknown_stack_remains_valid_and_pending (test_installer.InstallerTests.test_unknown_stack_remains_valid_and_pending) ... ok
+test_cli_exit_codes_and_validate_list_all (test_runner.RunnerTests.test_cli_exit_codes_and_validate_list_all) ... ok
+test_empty_and_space_arguments_are_preserved (test_runner.RunnerTests.test_empty_and_space_arguments_are_preserved) ... ok
+test_missing_executable_is_failed_and_remaining_checks_run (test_runner.RunnerTests.test_missing_executable_is_failed_and_remaining_checks_run) ... ok
+test_module_entry_point (test_runner.RunnerTests.test_module_entry_point) ... ok
+test_no_selection_never_executes (test_runner.RunnerTests.test_no_selection_never_executes) ... ok
+test_relative_executable_is_resolved_from_check_working_directory (test_runner.RunnerTests.test_relative_executable_is_resolved_from_check_working_directory) ... ok
+test_results_link_cannot_write_outside_project (test_runner.RunnerTests.test_results_link_cannot_write_outside_project) ... ok
+test_selected_checks_follow_requested_order (test_runner.RunnerTests.test_selected_checks_follow_requested_order) ... ok
+test_selection_and_all_six_statuses (test_runner.RunnerTests.test_selection_and_all_six_statuses) ... ok
+test_success_failure_timeout_and_evidence (test_runner.RunnerTests.test_success_failure_timeout_and_evidence) ... ok
+test_timeout_stops_child_process (test_runner.RunnerTests.test_timeout_stops_child_process) ... ok
+test_unique_reports (test_runner.RunnerTests.test_unique_reports) ... ok
+test_unknown_selection_validated_before_execution (test_runner.RunnerTests.test_unknown_selection_validated_before_execution) ... ok
+test_version_mismatch_prevents_command_execution (test_runner.RunnerTests.test_version_mismatch_prevents_command_execution) ... ok
+test_working_directory_and_discovery (test_runner.RunnerTests.test_working_directory_and_discovery) ... ok
+
+----------------------------------------------------------------------
+Ran 39 tests in 3.857s
+
+OK
+
+
+Exit code: 0

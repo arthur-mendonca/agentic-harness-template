@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "harness_version": "0.1.0",
+  "project": "agentic-harness-template",
+  "checks": {
+    "test": {
+      "state": "configured",
+      "command": ["python", "-m", "unittest", "discover", "-s", "tests", "-v"],
+      "cwd": ".",
+      "timeout": 120
+    }
+  }
+}
