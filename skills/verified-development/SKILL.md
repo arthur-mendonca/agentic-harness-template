@@ -1,7 +1,7 @@
 ---
 name: verified-development
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 description: Coordena implementação de funcionalidades e correção de bugs com investigação prévia, TDD, verificações automatizadas, revisão independente e homologação HTTP quando aplicável. Use ao receber uma tarefa de desenvolvimento que precisa de evidências verificáveis.
 ---
 
@@ -15,7 +15,7 @@ description: Coordena implementação de funcionalidades e correção de bugs co
 
 1. Leia o `AGENTS.md` do repositório, verifique alterações preexistentes e identifique os critérios de aceitação. Não descarte nem sobrescreva trabalho existente.
 
-2. Use `code-investigation` para investigar o comportamento atual, as dependências e os testes relevantes antes de editar. Solicite decisões humanas apenas quando tecnicamente necessárias. Não invente requisitos nem bloqueie a tarefa por escolhas triviais.
+2. Consulte `planos/instrucoes.md`. Faça recuperação seletiva das categorias e seções pertinentes de `memoria/`: regras confirmadas, problemas relacionados e decisões relevantes. Evite investigações repetidas quando os registros forem confiáveis e atuais; inspecione o código quando necessário e investigue contradições ou desatualização sem presumir qual fonte está correta. Use `code-investigation` para investigar comportamento, dependências e testes antes de editar. Solicite decisões humanas apenas quando necessárias, sem inventar requisitos.
 
 3. Use `tdd-implementation` para reproduzir o defeito ou especificar o comportamento esperado por meio de testes, implementar a menor alteração necessária e preservar comportamentos não relacionados.
 
@@ -27,7 +27,9 @@ description: Coordena implementação de funcionalidades e correção de bugs co
 
 7. Quando a alteração afetar uma interface HTTP, use `http-homologation` para preparar os casos de teste e gerar ou atualizar coleções Postman, quando aplicável. Execute os testes HTTP somente quando houver ambiente disponível e autorização necessária. Caso contrário, registre a pendência. Para alterações sem interface HTTP afetada, registre "não aplicável".
 
-8. Consulte `planos/instrucoes.md`, que concentra as instruções e o planejamento da tarefa. Confirme os resultados das verificações, acrescente uma entrada real da tarefa em `planos/relatorios.md` e registre pendências em `planos/pendencias.md`. O comando `python -m harness.installer init CAMINHO` prepara esses arquivos no projeto. Entregue também o relatório conciso abaixo; não crie arquivos vazios nem invente evidências.
+8. Após as verificações, avalie: A ausência deste registro prejudicaria uma implementação, investigação, entrega ou decisão futura? Se não, não registre. A avaliação não obriga a editar arquivos. Siga os critérios dos documentos gerados: regras confirmadas ou aprovadas em `memoria/regras-negocio.md`; problemas persistentes e atualizações de status em `memoria/problemas-conhecidos.md`; decisões não evidentes, com impacto futuro e risco de retrabalho ou regressão se ausentes, em `memoria/decisoes.md`. Atualize sem duplicações, distinguindo fatos, decisões aprovadas e questões abertas. Não altere comportamento esperado sem autorização nem corrija problemas fora do escopo.
+
+9. Registre em `planos/pendencias.md` somente ações futuras concretas ainda necessárias e relevantes, referenciando problemas por identificador. Atualize ou remova ações concluídas conforme relevância histórica. Em `planos/relatorios.md`, registre apenas entregas relevantes, com data, identificação, comportamento e impactos. Diagnósticos intermediários, testes rotineiros e tarefas sem entrega relevante não exigem entrada. Preserve JSON/logs em `.harness/results/`, sem copiá-los para documentos permanentes. Apresente resultados efetivos, comandos, limitações e verificações impedidas no relatório final abaixo mesmo sem registro permanente. `python -m harness.installer init CAMINHO` prepara documentos ausentes e informa diferenças sem sobrescrever existentes.
 
 ## Limites e restrições
 

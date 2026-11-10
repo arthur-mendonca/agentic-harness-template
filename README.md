@@ -110,10 +110,28 @@ planos/
   instrucoes.md
   pendencias.md
   relatorios.md
+memoria/
+  regras-negocio.md
+  problemas-conhecidos.md
+  decisoes.md
 .harness/results/
 ```
 
-`planos/instrucoes.md` concentra as instruções, investigação e planejamento da tarefa e substitui o antigo `planos/novo-mapa.md`. Não é criado `planos/mapa.md`. `planos/pendencias.md` recebe pendências observadas; `planos/relatorios.md` recebe uma entrada por tarefa real, com comandos, resultados, evidências e limitações. `AGENTS.md` contém apenas instruções permanentes para os agentes.
+`planos/instrucoes.md` concentra a tarefa atual e substitui o antigo `planos/novo-mapa.md`. `planos/pendencias.md` contém somente ações futuras concretas ainda necessárias e relevantes; ao concluir, atualize ou remova conforme relevância histórica. `planos/relatorios.md` resume entregas relevantes com data, identificação, comportamento e impactos. Diagnósticos intermediários, testes rotineiros e tarefas sem entrega relevante não exigem entradas.
+
+A memória Markdown versionável preserva conhecimento entre sessões, independentemente de linguagem ou plataforma:
+
+| Documento | Critério |
+| --- | --- |
+| `memoria/regras-negocio.md` | Requisitos e restrições confirmados ou aprovados; prefira referência à fonte oficial. Comportamento observado não constitui regra automaticamente. |
+| `memoria/problemas-conhecidos.md` | Problemas persistentes relevantes para investigação, discussão ou priorização futura; identifique relatos, hipóteses e reproduções, usando identificador estável e status atualizado, inclusive ao resolver. |
+| `memoria/decisoes.md` | Somente decisões não evidentes no código, com influência futura, relevância duradoura e risco de retrabalho, erro ou regressão se esquecidas; registre decisão, justificativa, escopo e eventual substituição. |
+
+Antes de implementar, consulte somente categorias e seções pertinentes. Registros confiáveis e atuais evitam investigações repetidas, mas não substituem inspeção do código; contradições precisam ser investigadas. Depois das verificações, avalie: a ausência deste registro prejudicaria uma implementação, investigação, entrega ou decisão futura? Se não, não registre. Atualize registros existentes sem duplicação; pendências referenciam o identificador do problema em vez de repetir sua descrição. Bugs triviais resolvidos na sessão e erros transitórios não pertencem à memória, salvo limitação duradoura ou risco relevante de regressão.
+
+Comandos, logs e resultados detalhados continuam em `.harness/results/`, ignorado pelo Git. O relatório final da sessão informa alterações, resultados efetivos, limitações e testes impedidos mesmo sem entrada permanente. Essas políticas orientam o Codex por instruções: o instalador não extrai conhecimento, não verifica a veracidade dos registros nem garante o julgamento do agente. Testes de conteúdo verificam as instruções distribuídas, não sua obediência em sessões futuras.
+
+Para consumidores existentes, instale a versão nova do pacote (ou atualize a cópia de `harness/`) e ajuste explicitamente `harness_version` em `harness.json` para `0.2.0`, preservando os checks; a correspondência exata de versão continua obrigatória. Execute `init CAMINHO`: documentos ausentes serão criados e `differences` mostrará propostas para os existentes. Revise e incorpore manualmente as instruções desejadas em `AGENTS.md` e `planos/`, preservando personalizações e histórico. Não há migração silenciosa. Atualize a skill coordenadora pela operação `skills --update`, examinando backups e conflitos, e valide configuração e checks pertinentes.
 
 `.gitignore` recebe `.harness/` sem apagar suas regras. Arquivos existentes são preservados; o resumo JSON mostra diferenças entre os conteúdos existentes e propostos. Arquivos do formato anterior, quando encontrados, permanecem intactos e são listados em `legacy_files` para consolidação manual. Configuração incompatível ou conflitos de caminho interrompem a operação antes da criação dos arquivos. Repetir a instalação preserva a configuração e os controles. A validação inicial não executa checks nem instala dependências. Não são criadas pastas `tarefas/` ou `templates/`, relatórios de execução fictícios, `.harness/http/` ou `.harness/baseline-sequence/`.
 
@@ -140,7 +158,7 @@ Exemplo de `harness.json` na raiz do consumidor:
 ```json
 {
   "schema_version": 1,
-  "harness_version": "0.1.0",
+  "harness_version": "0.2.0",
   "project": "meu-projeto",
   "checks": {
     "test": {
@@ -219,8 +237,8 @@ Para distribuição local reproduzível, construa e retenha o wheel e seu hash:
 
 ```console
 python -m pip wheel . --no-deps --wheel-dir .harness/wheels
-python -m pip hash .harness/wheels/agentic_verifiable_harness-0.1.0-py3-none-any.whl
-python -m pip install --no-deps .harness/wheels/agentic_verifiable_harness-0.1.0-py3-none-any.whl
+python -m pip hash .harness/wheels/agentic_verifiable_harness-0.2.0-py3-none-any.whl
+python -m pip install --no-deps .harness/wheels/agentic_verifiable_harness-0.2.0-py3-none-any.whl
 ```
 
 Registre o hash em seu mecanismo de dependências com verificação de integridade. Builds de source usam isolamento do pip e podem baixar setuptools; o wheel instalado não precisa desse build tool nem de rede.

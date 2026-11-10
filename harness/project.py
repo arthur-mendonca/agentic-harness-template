@@ -31,9 +31,18 @@ PROJECT_FILES = {
 
 ## Entrega
 
-- Registre os resultados reais em `planos/relatorios.md` e as pendências em `planos/pendencias.md`.
+- Após as verificações, avalie a persistência seletiva descrita abaixo; não há obrigação de modificar documentos.
 - Apresente um relatório curto com: arquivos alterados, comportamento implementado, testes e verificações executados (com resultados), revisão realizada, riscos e pendências.
 - Diferencie resultados comprovados de verificações não executadas ou impedidas.
+
+## Memória e documentação seletivas
+
+- Antes de implementar, faça recuperação seletiva: identifique categorias relevantes e consulte somente documentos e seções pertinentes de `memoria/`. Preserve regras confirmadas e considere problemas e decisões relacionados ao escopo, sem leitura integral obrigatória.
+- Evite repetir investigações confiáveis e atuais. A memória não substitui a inspeção do código; investigue contradições e sinais de desatualização sem presumir qual fonte está correta.
+- Após verificar, pergunte antes de persistir em memória, pendências ou relatórios: A ausência deste registro prejudicaria uma implementação, investigação, entrega ou decisão futura? Se não, não registre.
+- Siga os critérios no documento de destino. Atualize registros existentes, sem duplicação; use referências e identificadores. Distinga fatos confirmados, decisões aprovadas e questões abertas. Não registre informações triviais ou transitórias para demonstrar atividade.
+- `memoria/` é versionável. Evidências detalhadas ficam em `.harness/results/`, ignorado pelo Git; comandos, resultados e limitações pertencem ao relatório final da sessão, sem cópia automática para Markdown permanente.
+- Pendências são ações futuras concretas; relatórios são entregas relevantes resumidas. Diagnósticos intermediários e testes rotineiros não exigem entradas. A ausência de entrada não dispensa verificações nem relatório final.
 
 ## Restrições permanentes do projeto
 
@@ -53,14 +62,36 @@ Concentre aqui as instruções e o planejamento da tarefa. Preencha antes da imp
 """,
     "planos/pendencias.md": """# Pendências
 
-Registre somente pendências observadas: descrição, motivo, evidência disponível e ação necessária. Ausência de registros não comprova que verificações foram executadas.
+Registre somente ação futura concreta que continue necessária após a tarefa e cuja omissão comprometa desenvolvimento, entrega ou decisão relevante, sem duplicar outro documento.
+Formato: identificador; ação; motivo ou impedimento; condição de conclusão, se aplicável; referência ao problema conhecido, quando pertinente.
+Não registrar debugging, testes bem-sucedidos, falhas transitórias ou verificações rotineiras não executadas sem obrigação futura. Problemas são descritos em `memoria/problemas-conhecidos.md`; use apenas referência ao identificador.
+Ao concluir, atualize ou remova conforme relevância histórica; não acumule encerradas sem justificativa.
 """,
-    "planos/relatorios.md": """# Relatórios das tarefas
+    "planos/relatorios.md": """# Entregas relevantes
 
-Acrescente uma entrada por tarefa efetivamente realizada, com data e identificação.
+Registre somente funcionalidades relevantes, bugs persistentes corrigidos, refatorações relevantes e mudanças significativas de comportamento, contratos públicos ou estrutura.
 
-Em cada entrada, registre solicitação, arquivos alterados, comportamento entregue, comandos executados, códigos de saída e caminhos das evidências locais. Diferencie RED/GREEN e regressão comprovados de etapas não verificadas. Informe a revisão independente, homologação HTTP pertinente, checks não executados, riscos e pendências.
+Formato: data e identificação; comportamento entregue; impactos relevantes; referências necessárias a problemas ou pendências.
+Não criar uma entrada apenas porque uma tarefa foi executada. Sem entrega relevante, não adicionar entrada. Não registrar diagnósticos intermediários, tentativas, conversas, debugging, pequenas alterações sem importância histórica ou testes rotineiros.
 
-Não registre resultados fictícios. Pendências também pertencem a `pendencias.md`.
+Comandos, listas de arquivos, logs, códigos de saída e caminhos de evidências pertencem ao relatório final da sessão ou a `.harness/results/`, sem duplicação automática aqui. A ausência de entrada não dispensa verificações nem relatório final.
+""",
+    "memoria/regras-negocio.md": """# Regras de negócio
+
+Preserve somente requisitos funcionais, comportamentos, restrições e exceções confirmados ou explicitamente aprovados que orientem implementações futuras. Não invente regras nem converta comportamento observado do código automaticamente em requisito.
+Prefira referências à fonte oficial a reproduções integrais; evite duplicação. Use identificador, regra e fonte de confirmação. Mudanças de comportamento esperado exigem autorização; atualize registros e preserve rastreabilidade de regras substituídas quando relevante.
+""",
+    "memoria/problemas-conhecidos.md": """# Problemas conhecidos
+
+Registre problemas persistentes relevantes após a tarefa que afetem implementações ou investigações futuras e mereçam discussão, priorização ou acompanhamento. Não registre toda falha de debugging, erros transitórios ou bugs triviais corrigidos na sessão, salvo limitação duradoura ou risco relevante de regressão.
+Use identificador estável; descrição; observado e esperado; componentes; evidências ou reprodução; causa, se conhecida; status; solução temporária, se existente. Preencha informações disponíveis, distinguindo relatos, hipóteses e problemas reproduzidos.
+Estados: Relatado; Em investigação; Confirmado; Resolvido; Não será corrigido. Atualize registros existentes, inclusive ao resolver, sem duplicação. Não corrija automaticamente problemas fora do escopo.
+Este documento descreve o problema; ações futuras necessárias pertencem a `planos/pendencias.md`, referenciando o identificador sem repetir a descrição.
+""",
+    "memoria/decisoes.md": """# Decisões técnicas e arquiteturais
+
+Política mais restritiva: registre somente decisões que satisfaçam todos os critérios: não facilmente inferíveis pelo código; influenciam implementações futuras; ausência pode causar retrabalho, erro ou regressão; relevância permanece após a tarefa.
+Formato curto: identificador; decisão; justificativa; escopo afetado; status quando aplicável. Identifique decisões substituídas e atualize sem duplicar.
+Preserve justificativas não evidentes, alternativas descartadas e restrições duradouras quando atenderem aos critérios. Não descreva extensamente arquitetura, dependências, configurações triviais, diretórios, funções evidentes, discussões ou detalhes temporários.
 """,
 }

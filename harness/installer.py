@@ -115,7 +115,7 @@ def init_project(project):
     root = Path(project).expanduser().resolve()
     if not root.is_dir():
         raise ConfigError(f"Destination must be an existing directory: {root}")
-    _preflight(root, (*PROJECT_FILES, "harness.json", ".gitignore"), ("planos", ".harness", ".harness/results"))
+    _preflight(root, (*PROJECT_FILES, "harness.json", ".gitignore"), ("planos", "memoria", ".harness", ".harness/results"))
     inspection, checks = inspect_project(root)
     config = {"schema_version": 1, "harness_version": __version__, "project": root.name, "checks": checks}
     validate_config(config, root)
@@ -139,7 +139,7 @@ def init_project(project):
     ignore_existed = ignore.exists()
     previous_ignore = ignore.read_bytes() if ignore_existed else b""
     patterns = [line.strip() for line in previous_ignore.decode("utf-8-sig").splitlines() if line.strip() and not line.lstrip().startswith("#")]
-    for relative in ("planos", ".harness/results"):
+    for relative in ("planos", "memoria", ".harness/results"):
         path = root / relative
         if not path.exists():
             path.mkdir(parents=True, exist_ok=True)

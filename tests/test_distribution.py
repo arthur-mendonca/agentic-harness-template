@@ -12,7 +12,8 @@ from tests.helpers import temporary_project
 
 class DistributionTests(unittest.TestCase):
     def test_wheel_generates_controls_and_runs_outside_checkout(self):
-        wheels = list((Path(__file__).resolve().parents[1] / ".harness/wheels").glob("*.whl"))
+        wheel_dir = Path(os.environ.get("HARNESS_WHEEL_DIR", Path(__file__).resolve().parents[1] / ".harness/wheels"))
+        wheels = list(wheel_dir.glob("*.whl"))
         if not wheels:
             if os.environ.get("HARNESS_TEST_WHEEL"):
                 self.fail("Wheel required but absent: build it with python -m pip wheel . --no-deps -w .harness/wheels")
@@ -47,6 +48,7 @@ project = Path(sys.argv[2])
 assert init_project(project)["valid"]
 assert {p.name for p in (project / "planos").iterdir()} == {"instrucoes.md", "pendencias.md", "relatorios.md"}
 assert not (project / "tarefas").exists()
+assert {p.name for p in (project / "memoria").iterdir()} == {"regras-negocio.md", "problemas-conhecidos.md", "decisoes.md"}
 config = json.loads((project / "harness.json").read_text(encoding="utf-8"))
 config["checks"] = {"smoke": {"state": "configured", "command": [sys.executable, "-c", "print('installed-wheel-ok')"], "cwd": ".", "timeout": 5}}
 (project / "harness.json").write_text(json.dumps(config), encoding="utf-8")
@@ -81,6 +83,7 @@ assert not (Path(sys.argv[1]) / "skills").exists()
 assert not (Path(sys.argv[1]) / "templates").exists()
 assert init_project(project)["valid"]
 assert {p.name for p in (project / "planos").iterdir()} == {"instrucoes.md", "pendencias.md", "relatorios.md"}
+assert {p.name for p in (project / "memoria").iterdir()} == {"regras-negocio.md", "problemas-conhecidos.md", "decisoes.md"}
 config = json.loads((project / "harness.json").read_text(encoding="utf-8"))
 config["checks"] = {"copied": {"state": "configured", "command": [sys.executable, "-c", "print('copied-runtime-ok')"], "cwd": ".", "timeout": 5}}
 (project / "harness.json").write_text(json.dumps(config), encoding="utf-8")
