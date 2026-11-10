@@ -5,8 +5,6 @@ import math
 from pathlib import Path
 import re
 
-from harness import __version__
-
 
 class ConfigError(ValueError):
     """The project configuration is unsafe, invalid, or incompatible."""
@@ -63,8 +61,8 @@ def validate_config(data, root):
         raise ConfigError(f"Configuration must contain exactly: {sorted(required)}")
     if type(data["schema_version"]) is not int or data["schema_version"] != 1:
         raise ConfigError("Unsupported schema_version; expected integer 1")
-    if data["harness_version"] != __version__:
-        raise ConfigError(f"Harness version mismatch: required {data['harness_version']!r}, installed {__version__}")
+    if not _text(data["harness_version"]):
+        raise ConfigError("harness_version must be nonempty text")
     if not _text(data["project"]) or not isinstance(data["checks"], dict):
         raise ConfigError("project must be nonempty text and checks must be an object")
     for name, check in data["checks"].items():

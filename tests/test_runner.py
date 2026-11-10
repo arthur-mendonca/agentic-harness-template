@@ -125,12 +125,12 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(main(["--project", str(self.root), "--validate"]), 0)
             self.assertEqual(main(["--project", str(self.root), "--list"]), 0)
 
-    def test_version_mismatch_prevents_command_execution(self):
-        self.data["harness_version"] = "9.9.9"
+    def test_older_harness_version_metadata_does_not_prevent_execution(self):
+        self.data["harness_version"] = "0.1.0"
         self.data["checks"]["ok"] = self.command("from pathlib import Path; Path('executed').touch()")
-        with self.assertRaises(ConfigError):
-            self.execute(["ok"])
-        self.assertFalse((self.root / "executed").exists())
+        report, code, _ = self.execute(["ok"])
+        self.assertEqual(code, 0, report)
+        self.assertTrue((self.root / "executed").exists())
 
     def test_module_entry_point(self):
         self.execute()

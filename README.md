@@ -15,6 +15,18 @@ Python 3.11–3.14, Windows e Linux. Sem dependências Python em tempo de execu�
 
 O `.gitignore` desta fonte exclui `/.harness/` do versionamento, incluindo evidências, projetos temporários e wheels. Wheels são saídas de build opcionais, guardadas em `.harness/wheels/`, sem uma pasta `dist/` na raiz. `build/`, `*.egg-info/`, `__pycache__/` e `.harness/` são artefatos locais de construção/verificação, não componentes a copiar para um consumidor. O instalador continua cuidando da regra `.harness/` no `.gitignore` do projeto de destino, preservando suas regras existentes.
 
+## Windows: fazer o `harness.exe` acompanhar este checkout
+
+Para manter um único `harness.exe` usando o código deste repositório, instale o pacote local em modo editável uma vez, na raiz do checkout e com o mesmo Python que criou o executável. No computador em que o executável está em `%APPDATA%\Python\Python314\Scripts`, use:
+
+```powershell
+C:\Python314\python.exe -m pip install --user --editable .
+```
+
+O `harness.exe` continua nesse diretório de `Scripts`, mas passa a carregar o módulo `harness` diretamente deste checkout. Depois de atualizar o repositório com Git, a próxima execução do `harness.exe` já usa o código novo; não é preciso reinstalar o pacote nem atualizar uma cópia do harness em cada projeto consumidor. O checkout precisa continuar no mesmo caminho. Se usar outro interpretador Python, repita a instalação editável com esse interpretador.
+
+O `harness_version` em `harness.json` registra a versão presente quando a configuração foi criada. A validação do consumidor depende de `schema_version`, não da versão instalada do pacote; assim, atualizar o checkout não exige editar `harness.json` em todos os consumidores. O `init CAMINHO` continua útil para preparar projetos novos e mostrar propostas de instruções, mas não é uma etapa de cada atualização do executável.
+
 ## Instalação principal: pacote Python compartilhado
 
 Instale o harness diretamente do repositório Git, preferencialmente em um ambiente virtual ativo:
@@ -46,7 +58,7 @@ No Windows, substitua `/caminho/meu-projeto` por um caminho como `"C:\caminho\me
 harness --check test
 ```
 
-O executor Python fica no ambiente em que o pacote foi instalado e pode atender diferentes repositórios, cada um com seu próprio `harness.json`. Não é necessário copiar `harness/` para os consumidores. `python -m harness.installer` e `python -m harness.runner` também estão disponíveis no mesmo ambiente. Atualizações são explícitas, conforme o procedimento de distribuição abaixo.
+O executor Python fica no ambiente em que o pacote foi instalado e pode atender diferentes repositórios, cada um com seu próprio `harness.json`. Não é necessário copiar `harness/` para os consumidores. `python -m harness.installer` e `python -m harness.runner` também estão disponíveis no mesmo ambiente. Instalações de pacote ou wheel acompanham a revisão instalada; para o executável acompanhar este checkout após cada atualização Git, use a instalação editável descrita acima.
 
 ## Alternativa: usar por cópia em um repositório existente
 
@@ -131,7 +143,7 @@ Antes de implementar, consulte somente categorias e seções pertinentes. Regist
 
 Comandos, logs e resultados detalhados continuam em `.harness/results/`, ignorado pelo Git. O relatório final da sessão informa alterações, resultados efetivos, limitações e testes impedidos mesmo sem entrada permanente. Essas políticas orientam o Codex por instruções: o instalador não extrai conhecimento, não verifica a veracidade dos registros nem garante o julgamento do agente. Testes de conteúdo verificam as instruções distribuídas, não sua obediência em sessões futuras.
 
-Para consumidores existentes, instale a versão nova do pacote (ou atualize a cópia de `harness/`) e ajuste explicitamente `harness_version` em `harness.json` para `0.2.0`, preservando os checks; a correspondência exata de versão continua obrigatória. Execute `init CAMINHO`: documentos ausentes serão criados e `differences` mostrará propostas para os existentes. Revise e incorpore manualmente as instruções desejadas em `AGENTS.md` e `planos/`, preservando personalizações e histórico. Não há migração silenciosa. Atualize a skill coordenadora pela operação `skills --update`, examinando backups e conflitos, e valide configuração e checks pertinentes.
+Para consumidores existentes, a instalação editável permite atualizar o executor uma vez no computador e compartilhá-lo entre projetos. `harness_version` é informativo e pode permanecer no valor gravado originalmente; `schema_version` continua controlando a compatibilidade do formato. `init CAMINHO` cria documentos ausentes e `differences` mostra propostas para documentos existentes, que devem ser revisadas e incorporadas manualmente quando desejado, preservando personalizações e histórico. Não há migração silenciosa. As skills globais são arquivos separados do executável: atualize-as quando necessário pela operação `skills --update`, examinando backups e conflitos.
 
 `.gitignore` recebe `.harness/` sem apagar suas regras. Arquivos existentes são preservados; o resumo JSON mostra diferenças entre os conteúdos existentes e propostos. Arquivos do formato anterior, quando encontrados, permanecem intactos e são listados em `legacy_files` para consolidação manual. Configuração incompatível ou conflitos de caminho interrompem a operação antes da criação dos arquivos. Repetir a instalação preserva a configuração e os controles. A validação inicial não executa checks nem instala dependências. Não são criadas pastas `tarefas/` ou `templates/`, relatórios de execução fictícios, `.harness/http/` ou `.harness/baseline-sequence/`.
 
@@ -181,7 +193,7 @@ Exemplo de `harness.json` na raiz do consumidor:
 
 Contrato validado estritamente por `harness/config.py`:
 
-- As únicas chaves de raiz são as quatro do exemplo; `schema_version` é o inteiro `1` e `harness_version` deve corresponder exatamente à versão instalada. `project` é texto não vazio; `checks` é um objeto, sem nomes obrigatórios.
+- As únicas chaves de raiz são as quatro do exemplo; `schema_version` é o inteiro `1` e `harness_version` é texto não vazio que registra a versão usada na criação. A validação não exige que corresponda à versão instalada. `project` é texto não vazio; `checks` é um objeto, sem nomes obrigatórios.
 - Nomes de checks seguem `[A-Za-z0-9][A-Za-z0-9_.-]*`. Não são aceitas chaves duplicadas no JSON nem campos desconhecidos.
 - `configured` exige exatamente `state`, `command` (lista de textos com executável não vazio; argumentos vazios são preservados e bytes NUL são proibidos), `cwd` (diretório existente, relativo à raiz) e `timeout` (segundos, número finito maior que zero, até 86400). Caminhos que saiam da raiz, inclusive por links, são rejeitados.
 - `unconfigured` e `not_applicable` exigem exatamente `state` e `reason` não vazio. Não aceitam comandos. Estados de resultado, como `passed`, não podem ser usados na configuração.
@@ -243,13 +255,13 @@ python -m pip install --no-deps .harness/wheels/agentic_verifiable_harness-0.2.0
 
 Registre o hash em seu mecanismo de dependências com verificação de integridade. Builds de source usam isolamento do pip e podem baixar setuptools; o wheel instalado não precisa desse build tool nem de rede.
 
-Para atualizar intencionalmente, selecione a nova revisão e examine as mudanças. Em um ambiente separado, substitua `<NOVO_SHA_COMPLETO>` pelo SHA completo escolhido e execute:
+Para atualizar intencionalmente uma instalação fixada em SHA, selecione a nova revisão e examine as mudanças. Em um ambiente separado, substitua `<NOVO_SHA_COMPLETO>` pelo SHA completo escolhido e execute:
 
 ```console
 python -m pip install --upgrade --force-reinstall "git+https://github.com/arthur-mendonca/agentic-harness-template.git@<NOVO_SHA_COMPLETO>"
 ```
 
-`--force-reinstall` permite trocar de revisão mesmo quando o número da versão do pacote permanece igual. Atualize também a revisão registrada em `requirements-harness.txt`, se utilizado. Para wheels, selecione e instale o novo arquivo explicitamente. Ajuste `harness_version` do consumidor somente se a versão do pacote mudar; na raiz de cada consumidor, execute `harness --validate` e os checks relevantes, como `harness --check test`, antes de adotar a atualização. Instale skills atualizadas somente pela operação `skills --update`, examinando conflitos e backups. Instalar/atualizar o pacote não modifica configurações de consumidores nem skills globais. Não use uma referência móvel como única fixação de versão. A versão deve ser incrementada quando o conteúdo distribuído mudar.
+`--force-reinstall` permite trocar de revisão mesmo quando o número da versão do pacote permanece igual. Atualize também a revisão registrada em `requirements-harness.txt`, se utilizado. Para wheels, selecione e instale o novo arquivo explicitamente. Com uma instalação editável, atualizar o checkout já atualiza o código usado pelo executável. A configuração do consumidor não precisa mudar quando `harness_version` mudar; valide com `harness --validate` e execute os checks relevantes, como `harness --check test`. Instale skills atualizadas somente pela operação `skills --update`, examinando conflitos e backups. Instalar/atualizar o pacote não modifica skills globais. Não use uma referência móvel como única fixação de versão em instalações de release. A versão deve ser incrementada quando o conteúdo distribuído mudar.
 
 ## Verificação do pacote
 

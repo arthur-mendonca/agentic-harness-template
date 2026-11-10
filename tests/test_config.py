@@ -29,7 +29,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_invalid_configurations(self):
         cases = [
             {"schema_version": 2}, {"schema_version": True},
-            {"harness_version": "9.0.0"}, {"project": ""},
+            {"harness_version": ""}, {"project": ""},
             {"extra": True}, {"checks": []},
             {"checks": {"../escape": {"state": "unconfigured", "reason": "pending"}}},
             {"checks": {"x": {"state": "passed"}}},
