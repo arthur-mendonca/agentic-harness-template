@@ -9,6 +9,7 @@ from harness import __version__
 from harness.config import ConfigError, discover_root, load_config, read_json
 from harness.installer import _preflight, init_project
 from harness.project import PROJECT_FILES
+from harness.project_legacy import AGENTS_TEMPLATE
 
 START = "<!-- harness:managed:start -->"
 END = "<!-- harness:managed:end -->"
@@ -19,6 +20,8 @@ def _custom_content(text, template):
     # Older installations had no ownership markers. Remove only exact known
     # boilerplate lines; keep additions, edited rules, headings and records.
     variants = [template, template.replace(".harness/", "")]
+    if template == PROJECT_FILES["AGENTS.md"]:
+        variants.extend((AGENTS_TEMPLATE, AGENTS_TEMPLATE.replace(".harness/", "")))
     known = {line.strip() for variant in variants for line in variant.splitlines() if line.strip()}
     known.add("- Registre os resultados reais em `planos/relatorios.md` e as pendências em `planos/pendencias.md`.")
     known.add("- Registre os resultados reais em `.harness/planos/relatorios.md` e as pendências em `.harness/planos/pendencias.md`.")

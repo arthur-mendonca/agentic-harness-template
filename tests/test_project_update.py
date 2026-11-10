@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from harness.installer import init_project
 from harness.project import PROJECT_FILES
+from harness.project_legacy import AGENTS_TEMPLATE
 from tests.helpers import temporary_project
 
 
@@ -20,17 +21,18 @@ class ProjectUpdateTests(unittest.TestCase):
     def test_updates_old_agents_and_preserves_local_rules_with_exact_backup(self):
         from harness.project_update import update_project
         agents = self.root / "AGENTS.md"
-        current = PROJECT_FILES["AGENTS.md"]
-        old = current[:current.index("## Memória e documentação seletivas")] + current[current.index("## Restrições permanentes do projeto"):]
+        old = AGENTS_TEMPLATE
         old = old.replace(".harness/planos/", "planos/").replace("`.harness/harness.json`", "`harness.json`")
         old += "\n- Nunca alterar o limite de 300 entregas.\n"
         agents.write_bytes(old.encode("utf-8"))
         summary = update_project(self.root)
         updated = agents.read_text(encoding="utf-8")
-        self.assertIn("## Memória e documentação seletivas", updated)
+        self.assertIn("# AGENTS.md — Regras permanentes", updated)
         self.assertIn("Nunca alterar o limite de 300 entregas.", updated)
         self.assertIn("`.harness/harness.json`", updated)
         self.assertNotIn("Se `harness.json`", updated)
+        self.assertNotIn("## Memória e documentação seletivas", updated)
+        self.assertNotIn("# Instruções permanentes para agentes", updated)
         self.assertEqual((Path(summary["backup"]) / "AGENTS.md").read_bytes(), old.encode("utf-8"))
         again = update_project(self.root)
         self.assertEqual(agents.read_text(encoding="utf-8"), updated)
@@ -75,7 +77,7 @@ class ProjectUpdateTests(unittest.TestCase):
         update_project(self.root)
         path = self.root / "AGENTS.md"
         current = path.read_text(encoding="utf-8")
-        current = current.replace("## Verificação", "- Regra local: não alterar APIs.\n\n## Verificação")
+        current = current.replace("## Regras permanentes do projeto", "- Regra local: não alterar APIs.\n\n## Regras permanentes do projeto")
         path.write_text(current, encoding="utf-8")
         update_project(self.root)
         result = path.read_text(encoding="utf-8")
@@ -94,8 +96,8 @@ class ProjectUpdateTests(unittest.TestCase):
         memory.write_text("Regra operacional confirmada.", encoding="utf-8")
         update_project(self.root)
         agents = (self.root / "AGENTS.md").read_text(encoding="utf-8")
-        self.assertIn("consulte `planos/IMPLEMENTATION_CONSTRAINTS.md`", agents)
-        self.assertIn("mesmo quando os diretórios em `.harness/` já existirem", agents)
+        self.assertIn("`IMPLEMENTATION_CONSTRAINTS.md`", agents)
+        self.assertIn("Para **cada documento** ausente", agents)
         self.assertIn("arquivos personalizados do legado", agents)
         self.assertEqual(constraints.read_text(encoding="utf-8"), "Preservar limite de 300 entregas.")
         self.assertEqual(memory.read_text(encoding="utf-8"), "Regra operacional confirmada.")

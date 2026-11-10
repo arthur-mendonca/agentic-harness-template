@@ -59,10 +59,13 @@ class MemoryTests(unittest.TestCase):
         agents = PROJECT_FILES['AGENTS.md']
         skill = (Path(__file__).resolve().parents[1] / 'skills/verified-development/SKILL.md').read_text(encoding='utf-8')
         for text in (agents, skill):
-            self.assertIn('recuperação seletiva', text)
-            self.assertIn('A ausência deste registro', text)
             self.assertIn('.harness/results/', text)
             self.assertNotIn('acrescente uma entrada real da tarefa', text)
             self.assertNotIn('uma entrada por tarefa', text)
+        self.assertTrue(agents.startswith('# AGENTS.md — Regras permanentes\n'))
+        self.assertIn('Consulte seletivamente regras, decisões e problemas relevantes', agents)
+        self.assertIn('somente se a omissão prejudicar trabalho futuro', agents)
+        self.assertIn('recuperação seletiva', skill)
+        self.assertIn('A ausência deste registro', skill)
         self.assertIn('Não criar uma entrada', PROJECT_FILES['.harness/planos/relatorios.md'])
         self.assertIn('ação futura concreta', PROJECT_FILES['.harness/planos/pendencias.md'])
