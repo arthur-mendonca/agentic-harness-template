@@ -11,6 +11,22 @@ from tests.helpers import temporary_project
 
 
 class DistributionTests(unittest.TestCase):
+    def test_editable_build_dispatches_to_setuptools_without_importing_package(self):
+        setup_path = Path(__file__).resolve().parents[1] / "setup.py"
+        script = '''
+import runpy
+import sys
+import types
+fake = types.ModuleType("setuptools")
+fake.setup = lambda: print("setuptools invoked")
+sys.modules["setuptools"] = fake
+sys.argv = [sys.argv[1], "editable_wheel"]
+runpy.run_path(sys.argv[0], run_name="__main__")
+'''
+        result = subprocess.run([sys.executable, "-I", "-c", script, str(setup_path)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "setuptools invoked")
+
     def test_wheel_generates_controls_and_runs_outside_checkout(self):
         wheel_dir = Path(os.environ.get("HARNESS_WHEEL_DIR", Path(__file__).resolve().parents[1] / ".harness/wheels"))
         wheels = list(wheel_dir.glob("*.whl"))

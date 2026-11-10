@@ -1,0 +1,3 @@
+[console_scripts]
+harness = harness.runner:main
+harness-setup = harness.installer:main
