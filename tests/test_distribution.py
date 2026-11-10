@@ -62,12 +62,12 @@ for entry in entries:
     assert callable(entry.load())
 project = Path(sys.argv[2])
 assert init_project(project)["valid"]
-assert {p.name for p in (project / "planos").iterdir()} == {"instrucoes.md", "pendencias.md", "relatorios.md"}
+assert {p.name for p in (project / ".harness/planos").iterdir()} == {"instrucoes.md", "pendencias.md", "relatorios.md"}
 assert not (project / "tarefas").exists()
-assert {p.name for p in (project / "memoria").iterdir()} == {"regras-negocio.md", "problemas-conhecidos.md", "decisoes.md"}
-config = json.loads((project / "harness.json").read_text(encoding="utf-8"))
+assert {p.name for p in (project / ".harness/memoria").iterdir()} == {"regras-negocio.md", "problemas-conhecidos.md", "decisoes.md"}
+config = json.loads((project / ".harness/harness.json").read_text(encoding="utf-8"))
 config["checks"] = {"smoke": {"state": "configured", "command": [sys.executable, "-c", "print('installed-wheel-ok')"], "cwd": ".", "timeout": 5}}
-(project / "harness.json").write_text(json.dumps(config), encoding="utf-8")
+(project / ".harness/harness.json").write_text(json.dumps(config), encoding="utf-8")
 report, code, path = run(project, ["smoke"])
 assert code == 0, report
 assert report["checks"]["smoke"]["stdout"].strip() == "installed-wheel-ok"
@@ -98,11 +98,11 @@ project = Path(sys.argv[2])
 assert not (Path(sys.argv[1]) / "skills").exists()
 assert not (Path(sys.argv[1]) / "templates").exists()
 assert init_project(project)["valid"]
-assert {p.name for p in (project / "planos").iterdir()} == {"instrucoes.md", "pendencias.md", "relatorios.md"}
-assert {p.name for p in (project / "memoria").iterdir()} == {"regras-negocio.md", "problemas-conhecidos.md", "decisoes.md"}
-config = json.loads((project / "harness.json").read_text(encoding="utf-8"))
+assert {p.name for p in (project / ".harness/planos").iterdir()} == {"instrucoes.md", "pendencias.md", "relatorios.md"}
+assert {p.name for p in (project / ".harness/memoria").iterdir()} == {"regras-negocio.md", "problemas-conhecidos.md", "decisoes.md"}
+config = json.loads((project / ".harness/harness.json").read_text(encoding="utf-8"))
 config["checks"] = {"copied": {"state": "configured", "command": [sys.executable, "-c", "print('copied-runtime-ok')"], "cwd": ".", "timeout": 5}}
-(project / "harness.json").write_text(json.dumps(config), encoding="utf-8")
+(project / ".harness/harness.json").write_text(json.dumps(config), encoding="utf-8")
 report, code, path = run(project, ["copied"])
 assert code == 0, report
 assert report["checks"]["copied"]["stdout"].strip() == "copied-runtime-ok"

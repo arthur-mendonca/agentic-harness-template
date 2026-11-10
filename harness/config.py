@@ -30,7 +30,7 @@ def discover_root(project=None):
         raise ConfigError(f"Project directory does not exist: {start}")
     candidates = [start] if project is not None else [start, *start.parents]
     for candidate in candidates:
-        if (candidate / "harness.json").is_file():
+        if any((candidate / name).is_file() for name in (".harness/harness.json", "harness.json")):
             return candidate
     raise ConfigError(f"No harness.json found from {start}")
 
@@ -93,4 +93,5 @@ def validate_config(data, root):
 
 
 def load_config(root):
-    return validate_config(read_json(contained_path(root, "harness.json")), root)
+    name = ".harness/harness.json" if (root / ".harness/harness.json").exists() else "harness.json"
+    return validate_config(read_json(contained_path(root, name)), root)

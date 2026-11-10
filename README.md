@@ -1,4 +1,4 @@
-# Harness Agêntico Verificável
+﻿# Harness Agêntico Verificável
 
 Esta é a fonte reutilizável do executor e do comando de preparação de projetos, acompanhada de cinco Agent Skills para cópia independente ao computador onde o Codex será utilizado. Projetos consumidores podem usar qualquer linguagem; precisam apenas de Python para executar o harness. O executor e o instalador de projetos funcionam sem a pasta `skills/` e sem skills globais instaladas.
 
@@ -25,7 +25,7 @@ C:\Python314\python.exe -m pip install --user --editable .
 
 O `harness.exe` continua nesse diretório de `Scripts`, mas passa a carregar o módulo `harness` diretamente deste checkout. Depois de atualizar o repositório com Git, a próxima execução do `harness.exe` já usa o código novo; não é preciso reinstalar o pacote nem atualizar uma cópia do harness em cada projeto consumidor. O checkout precisa continuar no mesmo caminho. Se usar outro interpretador Python, repita a instalação editável com esse interpretador.
 
-O `harness_version` em `harness.json` registra a versão presente quando a configuração foi criada. A validação do consumidor depende de `schema_version`, não da versão instalada do pacote; assim, atualizar o checkout não exige editar `harness.json` em todos os consumidores. O `init CAMINHO` continua útil para preparar projetos novos e mostrar propostas de instruções, mas não é uma etapa de cada atualização do executável.
+O `harness_version` em `.harness/harness.json` registra a versão presente quando a configuração foi criada. A validação do consumidor depende de `schema_version`, não da versão instalada do pacote; assim, atualizar o checkout não exige editar `.harness/harness.json` em todos os consumidores. O `init CAMINHO` continua útil para preparar projetos novos e mostrar propostas de instruções, mas não é uma etapa de cada atualização do executável.
 
 ## Instalação principal: pacote Python compartilhado
 
@@ -52,13 +52,13 @@ harness --validate
 harness --list
 ```
 
-No Windows, substitua `/caminho/meu-projeto` por um caminho como `"C:\caminho\meu-projeto"`. O comando `init` cria `harness.json` na raiz do consumidor e os controles documentais descritos abaixo. Ajuste nesse arquivo os checks pendentes; depois, se houver um check `test` configurado, execute:
+No Windows, substitua `/caminho/meu-projeto` por um caminho como `"C:\caminho\meu-projeto"`. O comando `init` cria `.harness/harness.json` em `.harness/` do consumidor e os controles documentais descritos abaixo. Ajuste nesse arquivo os checks pendentes; depois, se houver um check `test` configurado, execute:
 
 ```console
 harness --check test
 ```
 
-O executor Python fica no ambiente em que o pacote foi instalado e pode atender diferentes repositórios, cada um com seu próprio `harness.json`. Não é necessário copiar `harness/` para os consumidores. `python -m harness.installer` e `python -m harness.runner` também estão disponíveis no mesmo ambiente. Instalações de pacote ou wheel acompanham a revisão instalada; para o executável acompanhar este checkout após cada atualização Git, use a instalação editável descrita acima.
+O executor Python fica no ambiente em que o pacote foi instalado e pode atender diferentes repositórios, cada um com seu próprio `.harness/harness.json`. Não é necessário copiar `harness/` para os consumidores. `python -m harness.installer` e `python -m harness.runner` também estão disponíveis no mesmo ambiente. Instalações de pacote ou wheel acompanham a revisão instalada; para o executável acompanhar este checkout após cada atualização Git, use a instalação editável descrita acima.
 
 ## Alternativa: usar por cópia em um repositório existente
 
@@ -80,9 +80,9 @@ Set-Location -LiteralPath $projeto
 python -m harness.installer init .
 ```
 
-Não copie o `harness.json` desta fonte: ele contém os checks do próprio harness. O comando `init` gera a configuração do seu projeto e os controles `AGENTS.md`, `planos/instrucoes.md`, `planos/pendencias.md` e `planos/relatorios.md`, preservando arquivos existentes.
+Não copie o `harness.json` desta fonte: ele contém os checks do próprio harness. O comando `init` gera a configuração do seu projeto e os controles `AGENTS.md`, `.harness/planos/instrucoes.md`, `.harness/planos/pendencias.md` e `.harness/planos/relatorios.md`, preservando arquivos existentes.
 
-Confira a configuração e ajuste em `harness.json` os checks que permanecerem pendentes:
+Confira a configuração e ajuste em `.harness/harness.json` os checks que permanecerem pendentes:
 
 ```powershell
 python -m harness.runner --validate
@@ -103,7 +103,7 @@ python -m harness.installer skills --source (Join-Path $origem "skills")
 
 O destino padrão é `~/.agents/skills/`, por exemplo `C:\Users\User\.agents\skills`. A operação informa conflitos em skills existentes; veja [instalação e atualização das skills](#instalar-ou-atualizar-as-skills-globais) para escolher outro destino ou atualizar com backup.
 
-Não é necessário copiar `tests/`, `.github/`, `.harness/`, `skills/`, `pyproject.toml` ou `setup.py` desta fonte para usar o harness no consumidor. Neste modo, use `python -m harness.installer` e `python -m harness.runner` a partir da raiz do projeto. Para atualizar a cópia, compare as versões e as alterações da pasta `harness/`; preserve o `harness.json` e os controles do consumidor e valide sua compatibilidade antes de executar checks.
+Não é necessário copiar `tests/`, `.github/`, `.harness/`, `skills/`, `pyproject.toml` ou `setup.py` desta fonte para usar o harness no consumidor. Neste modo, use `python -m harness.installer` e `python -m harness.runner` a partir da raiz do projeto. Para atualizar a cópia, compare as versões e as alterações da pasta `harness/`; preserve o `.harness/harness.json` e os controles do consumidor e valide sua compatibilidade antes de executar checks.
 
 ## Comportamento do instalador de projetos
 
@@ -117,33 +117,34 @@ O comando `init` gera os controles diretamente no repositório informado:
 
 ```text
 AGENTS.md
-harness.json
-planos/
+.harness/
+  harness.json
+  planos/
   instrucoes.md
   pendencias.md
   relatorios.md
-memoria/
+  memoria/
   regras-negocio.md
   problemas-conhecidos.md
   decisoes.md
-.harness/results/
+  results/
 ```
 
-`planos/instrucoes.md` concentra a tarefa atual e substitui o antigo `planos/novo-mapa.md`. `planos/pendencias.md` contém somente ações futuras concretas ainda necessárias e relevantes; ao concluir, atualize ou remova conforme relevância histórica. `planos/relatorios.md` resume entregas relevantes com data, identificação, comportamento e impactos. Diagnósticos intermediários, testes rotineiros e tarefas sem entrega relevante não exigem entradas.
+`.harness/planos/instrucoes.md` concentra a tarefa atual e substitui o antigo `planos/novo-mapa.md`. `.harness/planos/pendencias.md` contém somente ações futuras concretas ainda necessárias e relevantes; ao concluir, atualize ou remova conforme relevância histórica. `.harness/planos/relatorios.md` resume entregas relevantes com data, identificação, comportamento e impactos. Diagnósticos intermediários, testes rotineiros e tarefas sem entrega relevante não exigem entradas.
 
-A memória Markdown versionável preserva conhecimento entre sessões, independentemente de linguagem ou plataforma:
+A memória Markdown local, ignorada pelo Git, preserva conhecimento entre sessões, independentemente de linguagem ou plataforma:
 
 | Documento | Critério |
 | --- | --- |
-| `memoria/regras-negocio.md` | Requisitos e restrições confirmados ou aprovados; prefira referência à fonte oficial. Comportamento observado não constitui regra automaticamente. |
-| `memoria/problemas-conhecidos.md` | Problemas persistentes relevantes para investigação, discussão ou priorização futura; identifique relatos, hipóteses e reproduções, usando identificador estável e status atualizado, inclusive ao resolver. |
-| `memoria/decisoes.md` | Somente decisões não evidentes no código, com influência futura, relevância duradoura e risco de retrabalho, erro ou regressão se esquecidas; registre decisão, justificativa, escopo e eventual substituição. |
+| `.harness/memoria/regras-negocio.md` | Requisitos e restrições confirmados ou aprovados; prefira referência à fonte oficial. Comportamento observado não constitui regra automaticamente. |
+| `.harness/memoria/problemas-conhecidos.md` | Problemas persistentes relevantes para investigação, discussão ou priorização futura; identifique relatos, hipóteses e reproduções, usando identificador estável e status atualizado, inclusive ao resolver. |
+| `.harness/memoria/decisoes.md` | Somente decisões não evidentes no código, com influência futura, relevância duradoura e risco de retrabalho, erro ou regressão se esquecidas; registre decisão, justificativa, escopo e eventual substituição. |
 
 Antes de implementar, consulte somente categorias e seções pertinentes. Registros confiáveis e atuais evitam investigações repetidas, mas não substituem inspeção do código; contradições precisam ser investigadas. Depois das verificações, avalie: a ausência deste registro prejudicaria uma implementação, investigação, entrega ou decisão futura? Se não, não registre. Atualize registros existentes sem duplicação; pendências referenciam o identificador do problema em vez de repetir sua descrição. Bugs triviais resolvidos na sessão e erros transitórios não pertencem à memória, salvo limitação duradoura ou risco relevante de regressão.
 
 Comandos, logs e resultados detalhados continuam em `.harness/results/`, ignorado pelo Git. O relatório final da sessão informa alterações, resultados efetivos, limitações e testes impedidos mesmo sem entrada permanente. Essas políticas orientam o Codex por instruções: o instalador não extrai conhecimento, não verifica a veracidade dos registros nem garante o julgamento do agente. Testes de conteúdo verificam as instruções distribuídas, não sua obediência em sessões futuras.
 
-Para consumidores existentes, a instalação editável permite atualizar o executor uma vez no computador e compartilhá-lo entre projetos. `harness_version` é informativo e pode permanecer no valor gravado originalmente; `schema_version` continua controlando a compatibilidade do formato. `init CAMINHO` cria documentos ausentes e `differences` mostra propostas para documentos existentes, que devem ser revisadas e incorporadas manualmente quando desejado, preservando personalizações e histórico. Não há migração silenciosa. As skills globais são arquivos separados do executável: atualize-as quando necessário pela operação `skills --update`, examinando backups e conflitos.
+Para consumidores existentes, a instalação editável permite atualizar o executor uma vez no computador e compartilhá-lo entre projetos. `harness_version` é informativo e pode permanecer no valor gravado originalmente; `schema_version` continua controlando a compatibilidade do formato. `init CAMINHO` cria documentos ausentes e `differences` mostra propostas para documentos existentes, que devem ser revisadas e incorporadas manualmente quando desejado, preservando personalizações e histórico. Projetos existentes mantêm sua configuração antiga ativa e seus documentos originais intactos. Para migrar, transfira manualmente todo o conteúdo de `planos/` e `memoria/` e o `harness.json` da raiz para `.harness/`, resolvendo conflitos e atualizando as referências em `AGENTS.md`. O instalador não cria documentos paralelos quando encontra os diretórios antigos. Se as duas configurações existirem, a configuração em `.harness/` tem precedência. As skills globais são arquivos separados do executável: atualize-as quando necessário pela operação `skills --update`, examinando backups e conflitos.
 
 `.gitignore` recebe `.harness/` sem apagar suas regras. Arquivos existentes são preservados; o resumo JSON mostra diferenças entre os conteúdos existentes e propostos. Arquivos do formato anterior, quando encontrados, permanecem intactos e são listados em `legacy_files` para consolidação manual. Configuração incompatível ou conflitos de caminho interrompem a operação antes da criação dos arquivos. Repetir a instalação preserva a configuração e os controles. A validação inicial não executa checks nem instala dependências. Não são criadas pastas `tarefas/` ou `templates/`, relatórios de execução fictícios, `.harness/http/` ou `.harness/baseline-sequence/`.
 
@@ -165,7 +166,7 @@ As skills `verified-development`, `code-investigation`, `tdd-implementation` e `
 
 ## Configuração v1
 
-Exemplo de `harness.json` na raiz do consumidor:
+Exemplo de `.harness/harness.json` em `.harness/` do consumidor:
 
 ```json
 {

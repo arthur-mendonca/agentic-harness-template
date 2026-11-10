@@ -15,25 +15,25 @@ class MemoryTests(unittest.TestCase):
         with temporary_project() as directory:
             root = Path(directory)
             summary = init_project(root)
-            self.assertIn('memoria/', summary['created'])
+            self.assertIn('.harness/memoria/', summary['created'])
             for name in MEMORY:
-                relative = 'memoria/' + name
+                relative = '.harness/memoria/' + name
                 self.assertEqual((root / relative).read_text(encoding='utf-8'), PROJECT_FILES[relative])
                 (root / relative).write_text('Registro confirmado: preservar\n', encoding='utf-8')
             summary = init_project(root)
             self.assertEqual(summary['created'], [])
             for name in MEMORY:
-                relative = 'memoria/' + name
+                relative = '.harness/memoria/' + name
                 self.assertIn(relative, summary['differences'])
                 self.assertEqual((root / relative).read_text(encoding='utf-8'), 'Registro confirmado: preservar\n')
 
     def test_conflicts_prevent_all_writes(self):
-        for relative in ('memoria', *('memoria/' + name for name in MEMORY)):
+        for relative in ('.harness/memoria', *('.harness/memoria/' + name for name in MEMORY)):
             with self.subTest(relative=relative), temporary_project() as directory:
                 root = Path(directory)
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
-                if relative == 'memoria':
+                if relative == '.harness/memoria':
                     path.write_text('preservar', encoding='utf-8')
                 else:
                     path.mkdir()
@@ -48,7 +48,8 @@ class MemoryTests(unittest.TestCase):
             project, outside = root / 'project', root / 'outside'
             project.mkdir()
             outside.mkdir()
-            directory_link(project / 'memoria', outside)
+            (project / '.harness').mkdir()
+            directory_link(project / '.harness/memoria', outside)
             with self.assertRaises(ConfigError):
                 init_project(project)
             self.assertEqual(list(outside.iterdir()), [])
@@ -63,5 +64,5 @@ class MemoryTests(unittest.TestCase):
             self.assertIn('.harness/results/', text)
             self.assertNotIn('acrescente uma entrada real da tarefa', text)
             self.assertNotIn('uma entrada por tarefa', text)
-        self.assertIn('Não criar uma entrada', PROJECT_FILES['planos/relatorios.md'])
-        self.assertIn('ação futura concreta', PROJECT_FILES['planos/pendencias.md'])
+        self.assertIn('Não criar uma entrada', PROJECT_FILES['.harness/planos/relatorios.md'])
+        self.assertIn('ação futura concreta', PROJECT_FILES['.harness/planos/pendencias.md'])

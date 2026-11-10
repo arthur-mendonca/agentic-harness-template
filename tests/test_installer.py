@@ -20,13 +20,20 @@ class InstallerTests(unittest.TestCase):
     def write_json(self, name, data):
         (self.root / name).write_text(json.dumps(data), encoding="utf-8")
 
+    def test_controls_are_centralized(self):
+        init_project(self.root)
+        for name in ('harness.json', 'planos/instrucoes.md', 'memoria/decisoes.md'):
+            self.assertTrue((self.root / '.harness' / name).is_file())
+        self.assertFalse((self.root / 'planos').exists())
+        self.assertFalse((self.root / 'memoria').exists())
+
     def test_empty_repository_and_idempotence(self):
         summary = init_project(self.root)
         config = load_config(self.root)
         self.assertTrue(summary["valid"])
         self.assertFalse(summary["checks_executed"])
         self.assertTrue(all(c["state"] == "unconfigured" for c in config["checks"].values()))
-        for path in ("AGENTS.md", "harness.json", "planos/instrucoes.md", "planos/pendencias.md", "planos/relatorios.md", ".gitignore"):
+        for path in ("AGENTS.md", ".harness/harness.json", ".harness/planos/instrucoes.md", ".harness/planos/pendencias.md", ".harness/planos/relatorios.md", ".gitignore"):
             self.assertTrue((self.root / path).is_file())
         self.assertTrue((self.root / ".harness/results").is_dir())
         self.assertFalse((self.root / ".harness/http").exists())
@@ -88,7 +95,8 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual((self.root / "harness.json").read_bytes(), original_bytes)
         self.assertTrue((self.root / ".gitignore").read_bytes().startswith(b"local-data\r\n"))
         self.assertIn("AGENTS.md", summary["differences"])
-        self.assertIn("harness.json", summary["differences"])
+        self.assertIn("harness.json", summary["legacy_files"])
+        self.assertFalse((self.root / ".harness/harness.json").exists())
 
     def test_preserves_legacy_control_files_without_silent_migration(self):
         (self.root / "planos").mkdir()
@@ -100,11 +108,11 @@ class InstallerTests(unittest.TestCase):
         summary = init_project(self.root)
         self.assertEqual(old_plan.read_text(encoding="utf-8"), "previous instructions")
         self.assertEqual(old_pending.read_text(encoding="utf-8"), "previous pending work")
-        self.assertEqual(set(summary["legacy_files"]), {"planos/novo-mapa.md", "tarefas/pendencias.md"})
-        self.assertTrue((self.root / "planos/instrucoes.md").is_file())
+        self.assertEqual(set(summary["legacy_files"]), {"planos", "tarefas/pendencias.md"})
+        self.assertFalse((self.root / ".harness/planos").exists())
 
     def test_control_file_path_conflict_causes_no_partial_install(self):
-        (self.root / "planos/relatorios.md").mkdir(parents=True)
+        (self.root / ".harness/planos/relatorios.md").mkdir(parents=True)
         with self.assertRaises(ConfigError):
             init_project(self.root)
         self.assertFalse((self.root / "harness.json").exists())
@@ -117,7 +125,8 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual([p.name for p in self.root.iterdir()], ["harness.json"])
 
     def test_conflicting_file_in_directory_position_causes_no_partial_install(self):
-        (self.root / "planos").write_text("important file", encoding="utf-8")
+        (self.root / ".harness").mkdir()
+        (self.root / ".harness/planos").write_text("important file", encoding="utf-8")
         with self.assertRaises(ConfigError):
             init_project(self.root)
         self.assertFalse((self.root / "harness.json").exists())
@@ -195,7 +204,8 @@ class InstallerTests(unittest.TestCase):
         project.mkdir()
         outside = self.root / "outside"
         outside.mkdir()
-        directory_link(project / "planos", outside)
+        (project / ".harness").mkdir()
+        directory_link(project / ".harness/planos", outside)
         with self.assertRaises(ConfigError):
             init_project(project)
         self.assertEqual(list(outside.iterdir()), [])
