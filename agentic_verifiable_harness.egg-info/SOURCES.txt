@@ -7,12 +7,17 @@ agentic_verifiable_harness.egg-info/dependency_links.txt
 agentic_verifiable_harness.egg-info/entry_points.txt
 agentic_verifiable_harness.egg-info/top_level.txt
 harness/__init__.py
+harness/__main__.py
 harness/config.py
 harness/installer.py
 harness/project.py
+harness/project_update.py
 harness/runner.py
+harness/updater.py
 tests/test_config.py
 tests/test_distribution.py
 tests/test_installer.py
 tests/test_memory.py
+tests/test_project_update.py
 tests/test_runner.py
+tests/test_update.py

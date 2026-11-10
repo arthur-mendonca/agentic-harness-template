@@ -78,6 +78,9 @@ for entry in entries:
     assert callable(entry.load())
 project = Path(sys.argv[2])
 assert init_project(project)["valid"]
+with contextlib.redirect_stdout(io.StringIO()):
+    assert main(["update", "--project", str(project)]) == 0
+assert "<!-- harness:managed:start -->" in (project / "AGENTS.md").read_text(encoding="utf-8")
 assert {p.name for p in (project / ".harness/planos").iterdir()} == {"instrucoes.md", "pendencias.md", "relatorios.md"}
 assert not (project / "tarefas").exists()
 assert {p.name for p in (project / ".harness/memoria").iterdir()} == {"regras-negocio.md", "problemas-conhecidos.md", "decisoes.md"}

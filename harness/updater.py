@@ -96,9 +96,17 @@ def update_app():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python -m harness update", description=__doc__)
-    parser.parse_args(argv)
+    parser.add_argument("--project", metavar="CAMINHO", help="Atualizar AGENTS.md e controles locais, sem reinstalar o app")
+    args = parser.parse_args(argv)
     try:
-        update_app()
+        if args.project is not None:
+            from harness.project_update import update_project
+
+            result = update_project(args.project)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            print("Atualização dos controles do projeto concluída.")
+        else:
+            update_app()
         return 0
     except (UpdateError, OSError, ValueError) as exc:
         print(f"Erro na atualização: {exc}", file=sys.stderr)

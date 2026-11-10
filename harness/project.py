@@ -10,8 +10,8 @@ PROJECT_FILES = {
 - Investigue os arquivos, testes e convenções relevantes antes de editar. Preserve a arquitetura e o comportamento não relacionados à tarefa.
 - Trabalhe apenas no escopo solicitado. Não crie documentação, automações ou arquivos auxiliares sem necessidade concreta.
 - Peça decisão humana somente para mudanças relevantes de arquitetura, contratos públicos, esquema de dados, dependências, segurança ou ações externas.
-- Consulte `.harness/planos/instrucoes.md` para as instruções e o planejamento da tarefa. Leia também `.harness/planos/IMPLEMENTATION_CONSTRAINTS.md`, quando existir.
-- Em projetos ainda não migrados, consulte os documentos correspondentes em `planos/` e `memoria/` se os diretórios em `.harness/` não existirem.
+- Consulte `.harness/planos/instrucoes.md` para as instruções e o planejamento da tarefa. Leia também `.harness/planos/IMPLEMENTATION_CONSTRAINTS.md`, quando existir; se esse arquivo não existir, consulte `planos/IMPLEMENTATION_CONSTRAINTS.md`, quando existir.
+- Para cada documento ausente em `.harness/planos/` ou `.harness/memoria/`, consulte o arquivo correspondente em `planos/` ou `memoria/`, mesmo quando os diretórios em `.harness/` já existirem. Inclua arquivos personalizados do legado na recuperação seletiva pertinente.
 
 ## Verificação
 

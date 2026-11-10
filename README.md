@@ -27,7 +27,19 @@ Esse é o comando completo de atualização. Ele localiza a instalação automat
 
 Em instalações por pacote ou wheel, o comando reinstala a revisão atual do repositório de origem (ou o repositório oficial quando não há origem Git registrada), mesmo se a versão não mudou. Branches e tags de origem são mantidas; um pin em SHA é substituído pela revisão atual da branch padrão. Em instalações locais, mantém o checkout, o modo editável e o ambiente Python. Requer rede para obter alterações e Git para acessar a fonte. Conflitos ou histórico divergente interrompem a operação com erro; o atualizador não descarta alterações locais e só informa sucesso depois da instalação terminar.
 
-A atualização do app atende os consumidores que usam essa instalação compartilhada. Ambientes virtuais independentes usam o mesmo comando com seu próprio Python. `AGENTS.md`, configurações e histórico dos consumidores são preservados. Skills globais continuam disponíveis pela [operação explícita de skills](#instalar-ou-atualizar-as-skills-globais); não fazem parte do pacote Python.
+A atualização do app atende os consumidores que usam essa instalação compartilhada. Ambientes virtuais independentes usam o mesmo comando com seu próprio Python. Skills globais continuam disponíveis pela [operação explícita de skills](#instalar-ou-atualizar-as-skills-globais); não fazem parte do pacote Python.
+
+### Atualizar o projeto local, incluindo AGENTS.md
+
+Na raiz do projeto consumidor, execute no CMD ou PowerShell:
+
+```console
+python -m harness update --project .
+```
+
+Esse comando aplica os controles da versão instalada ao `AGENTS.md` e aos documentos em `.harness/`, sem Git, rede ou reinstalação do app. Preserva os comandos dos checks, regras personalizadas, tarefas, registros e memória. Antes de substituir arquivos, salva os originais em `.harness/backups/update-<identificador>/` e informa esse caminho. A atualização não executa checks.
+
+As instruções geradas ficam delimitadas por comentários `harness:managed`; conteúdo personalizado fica fora desse bloco. Na primeira atualização de arquivos antigos sem marcadores, somente linhas exatamente iguais às instruções padrão conhecidas são substituídas; textos diferentes são mantidos como personalizações. Atualizações seguintes usam o modelo anterior registrado em `.harness/template-state.json`, preservando também regras adicionadas dentro do bloco. Repetir o comando sem mudanças não duplica conteúdo nem cria backups adicionais. Em layouts antigos, documentos padrão de `planos/`, `memoria/` e a configuração da raiz são incorporados em `.harness/`, mantendo os originais. Arquivos personalizados adicionais permanecem no legado, e o `AGENTS.md` orienta sua consulta quando não há arquivo canônico correspondente.
 
 O princípio de manutenção é: operações rotineiras do app devem ser automatizadas em um único comando. Os procedimentos de SHA e wheel abaixo são opções de distribuição controlada.
 
@@ -254,8 +266,8 @@ Para distribuição local reproduzível, construa e retenha o wheel e seu hash:
 
 ```console
 python -m pip wheel . --no-deps --wheel-dir .harness/wheels
-python -m pip hash .harness/wheels/agentic_verifiable_harness-0.3.0-py3-none-any.whl
-python -m pip install --no-deps .harness/wheels/agentic_verifiable_harness-0.3.0-py3-none-any.whl
+python -m pip hash .harness/wheels/agentic_verifiable_harness-0.3.1-py3-none-any.whl
+python -m pip install --no-deps .harness/wheels/agentic_verifiable_harness-0.3.1-py3-none-any.whl
 ```
 
 Registre o hash em seu mecanismo de dependências com verificação de integridade. Builds de source usam isolamento do pip e podem baixar setuptools; o wheel instalado não precisa desse build tool nem de rede.
