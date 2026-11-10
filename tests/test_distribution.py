@@ -18,7 +18,10 @@ import runpy
 import sys
 import types
 fake = types.ModuleType("setuptools")
-fake.setup = lambda: print("setuptools invoked")
+def setup(**kwargs):
+    assert kwargs["options"]["build_py"]["force"] is True
+    print("setuptools invoked")
+fake.setup = setup
 sys.modules["setuptools"] = fake
 sys.argv = [sys.argv[1], "editable_wheel"]
 runpy.run_path(sys.argv[0], run_name="__main__")
@@ -38,6 +41,10 @@ runpy.run_path(sys.argv[0], run_name="__main__")
         with zipfile.ZipFile(wheels[0]) as archive:
             self.assertFalse(any(name.endswith("SKILL.md") or name.startswith("harness_skills/") for name in archive.namelist()))
             self.assertFalse(any(name.startswith(("templates/", "harness_templates/")) for name in archive.namelist()))
+            runtime = Path(__file__).resolve().parents[1] / "harness"
+            for module in runtime.glob("*.py"):
+                self.assertEqual(archive.read(f"harness/{module.name}"), module.read_bytes(),
+                                 f"Wheel contains a stale module: {module.name}")
         with temporary_project() as directory:
             root = Path(directory)
             site = root / "site"
@@ -52,6 +59,15 @@ from pathlib import Path
 import sys
 sys.path.insert(0, sys.argv[1])
 import harness
+import contextlib
+import io
+from harness.runner import main
+with contextlib.redirect_stdout(io.StringIO()) as help_output:
+    try:
+        main(["update", "--help"])
+    except SystemExit as exc:
+        assert exc.code == 0
+assert "python -m harness update" in help_output.getvalue()
 from harness.installer import init_project
 from harness.runner import run
 assert Path(harness.__file__).is_relative_to(Path(sys.argv[1]))

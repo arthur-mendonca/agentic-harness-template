@@ -126,7 +126,17 @@ def run(project=None, checks=None):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "update":
+        # A running Windows console launcher can lock harness.exe while pip
+        # replaces it. The module invocation keeps the executable unlocked.
+        if os.name == "nt" and os.path.basename(sys.argv[0]).lower() == "harness.exe":
+            print("Para atualizar, execute: python -m harness update", file=sys.stderr)
+            return 2
+        from harness.updater import main as update
+
+        return update(argv[1:])
+    parser = argparse.ArgumentParser(description=__doc__, epilog="Atualizar o app: python -m harness update")
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--project", help="Exact project root; otherwise discover upwards from cwd")
     mode = parser.add_mutually_exclusive_group()
