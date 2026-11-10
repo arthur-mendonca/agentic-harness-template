@@ -6,7 +6,7 @@ PROJECT_FILES = {
 ## Fluxo de trabalho
 
 - Para implementar funcionalidades ou corrigir bugs, utilize a skill `$verified-development` como coordenadora do método.
-- Siga o acionamento previsto nessa skill para `$code-investigation`, `$tdd-implementation`, `$adversarial-review` (usando `$review-agent` quando disponível) e, quando a tarefa envolver API HTTP, `$http-homologation`.
+- Siga o acionamento previsto nessa skill para `$code-investigation`, `$tdd-implementation`, a skill nativa `$review-agent` do Codex e, quando a tarefa envolver API HTTP, `$http-homologation`.
 - Investigue os arquivos, testes e convenções relevantes antes de editar. Preserve a arquitetura e o comportamento não relacionados à tarefa.
 - Trabalhe apenas no escopo solicitado. Não crie documentação, automações ou arquivos auxiliares sem necessidade concreta.
 - Peça decisão humana somente para mudanças relevantes de arquitetura, contratos públicos, esquema de dados, dependências, segurança ou ações externas.

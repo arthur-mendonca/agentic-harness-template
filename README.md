@@ -1,13 +1,13 @@
 ﻿# Harness Agêntico Verificável
 
-Esta é a fonte reutilizável do executor e do comando de preparação de projetos, acompanhada de cinco Agent Skills para cópia independente ao computador onde o Codex será utilizado. Projetos consumidores podem usar qualquer linguagem; precisam apenas de Python para executar o harness. O executor e o instalador de projetos funcionam sem a pasta `skills/` e sem skills globais instaladas.
+Esta é a fonte reutilizável do executor e do comando de preparação de projetos, acompanhada de quatro Agent Skills para cópia independente ao computador onde o Codex será utilizado. Projetos consumidores podem usar qualquer linguagem; precisam apenas de Python para executar o harness. O executor e o instalador de projetos funcionam sem a pasta `skills/` e sem skills globais instaladas.
 
 ## Requisitos e estrutura
 
 Python 3.11–3.14, Windows e Linux. Sem dependências Python em tempo de execução. A construção do pacote utiliza setuptools; Git é necessário apenas para instalar diretamente do repositório. Ferramentas dos checks pertencem ao projeto consumidor e não são instaladas automaticamente.
 
 - `harness/`: validação, execução e instalador centralizados. `harness/project.py` define os controles gerados diretamente no destino; não há pasta de templates.
-- `skills/`: versões oficiais das cinco skills, usadas somente na operação explícita de cópia para o Codex; não integram o pacote Python instalado.
+- `skills/`: versões oficiais das quatro skills, usadas somente na operação explícita de cópia para o Codex; não integram o pacote Python instalado.
 - `tests/`: testes locais com projetos temporários, sem APIs ou bancos de dados.
 - `.github/workflows/tests.yml`: execução automatizada dos testes em Windows/Linux e Python 3.11–3.14, conforme solicitado inicialmente.
 - `setup.py`: interface do instalador e compatibilidade com o backend de empacotamento.
@@ -15,17 +15,110 @@ Python 3.11–3.14, Windows e Linux. Sem dependências Python em tempo de execu�
 
 O `.gitignore` desta fonte exclui `/.harness/` do versionamento, incluindo evidências, projetos temporários e wheels. Wheels são saídas de build opcionais, guardadas em `.harness/wheels/`, sem uma pasta `dist/` na raiz. `build/`, `*.egg-info/`, `__pycache__/` e `.harness/` são artefatos locais de construção/verificação, não componentes a copiar para um consumidor. O instalador continua cuidando da regra `.harness/` no `.gitignore` do projeto de destino, preservando suas regras existentes.
 
-## Windows: fazer o `harness.exe` acompanhar este checkout
+## Como manter o app local e os projetos atualizados
 
-Para manter um único `harness.exe` usando o código deste repositório, instale o pacote local em modo editável uma vez, na raiz do checkout e com o mesmo Python que criou o executável. No computador em que o executável está em `%APPDATA%\Python\Python314\Scripts`, use:
+A atualização tem quatro partes. Atualizar o app Python não reescreve os arquivos de cada projeto nem as skills já instaladas.
+
+| Parte | Onde fica | Como atualizar |
+| --- | --- | --- |
+| App compartilhado (`harness.exe` e `harness-setup.exe`) | Ambiente Python da máquina | Atualizar a fonte e a instalação desse Python |
+| App exclusivo de um projeto | Ambiente virtual próprio ou pasta `harness/` copiada | Atualizar cada ambiente ou cópia individualmente |
+| Configuração e instruções de cada projeto | `AGENTS.md` e `.harness/` no consumidor | Executar `init` atualizado, revisar `differences` e incorporar as mudanças manualmente |
+| Skills globais | Por padrão, `~/.agents/skills/` | Executar `skills --update` com a fonte atualizada |
+
+### 1. Atualizar o app compartilhado no Windows
+
+Use `python` para o interpretador escolhido para a instalação compartilhada e ajuste o caminho genérico abaixo para a pasta deste checkout. Mantenha o mesmo interpretador nos comandos desta seção. O exemplo usa instalação de usuário, fora de um ambiente virtual:
 
 ```powershell
-C:\Python314\python.exe -m pip install --user --editable .
+$origem = "C:\caminho\agentic-harness-template"
+python -m pip install --user --editable "$origem"
 ```
 
-O `harness.exe` continua nesse diretório de `Scripts`, mas passa a carregar o módulo `harness` diretamente deste checkout. Depois de atualizar o repositório com Git, a próxima execução do `harness.exe` já usa o código novo; não é preciso reinstalar o pacote nem atualizar uma cópia do harness em cada projeto consumidor. O checkout precisa continuar no mesmo caminho. Se usar outro interpretador Python, repita a instalação editável com esse interpretador.
+O executável carrega o código deste checkout. Mantenha a pasta no mesmo caminho. Para buscar alterações remotas, confira primeiro seu trabalho local e atualize a branch acompanhada:
 
-O `harness_version` em `.harness/harness.json` registra a versão presente quando a configuração foi criada. A validação do consumidor depende de `schema_version`, não da versão instalada do pacote; assim, atualizar o checkout não exige editar `.harness/harness.json` em todos os consumidores. O `init CAMINHO` continua útil para preparar projetos novos e mostrar propostas de instruções, mas não é uma etapa de cada atualização do executável.
+```powershell
+git -C "$origem" status --short
+git -C "$origem" pull --ff-only
+```
+
+Se houver alterações locais ou o Git não puder avançar a branch, resolva essa situação antes de continuar. Mudanças salvas apenas no código Python ficam disponíveis na próxima execução, sem reinstalação. Se a atualização mudar versão, dependências, metadados ou comandos definidos em `pyproject.toml`, repita o comando de instalação editável. Você também pode repeti-lo em toda atualização para manter a instalação alinhada à fonte. Veja a [documentação de instalações locais do pip](https://pip.pypa.io/en/stable/topics/local-project-installs/).
+
+Confira qual executável o terminal encontra e qual código o Python compartilhado carrega:
+
+```powershell
+Get-Command harness -All
+python -P -c "import sys, harness; print(sys.executable); print(harness.__file__); print(harness.__version__)"
+```
+
+O caminho de `harness.__file__` deve apontar para a pasta `harness/` deste checkout. `-P` evita carregar uma pasta `harness/` do diretório atual no lugar do pacote instalado. Se o PATH selecionar outro ambiente, use explicitamente o Python desejado, como nos comandos abaixo.
+
+### 2. Atualizar os arquivos de cada projeto consumidor
+
+**Repita este procedimento para cada projeto**, depois de atualizar o app. Mesmo com um executor compartilhado, cada consumidor mantém suas próprias instruções, configuração, planos e memória.
+
+```powershell
+$projeto = "C:\caminho\meu-projeto"
+python -P -m harness.installer init "$projeto"
+```
+
+O `init` cria arquivos ausentes, preserva os existentes e imprime um resumo JSON. Ele **não aplica automaticamente atualizações aos arquivos existentes**. Examine `differences`: cada entrada mostra um diff entre o conteúdo existente e o proposto pela versão atual do instalador.
+
+1. Faça backup de `AGENTS.md` e de `.harness/` antes de editar. `.harness/` é ignorado pelo Git; um commit do projeto não protege esses arquivos.
+2. Incorpore manualmente as mudanças pertinentes em `AGENTS.md` e nos documentos de `.harness/planos/` e `.harness/memoria/`, preservando regras, tarefas e histórico. A proposta contém o texto inicial dos documentos; não substitua o conteúdo acumulado pelo modelo.
+3. Revise `.harness/harness.json` preservando comandos, diretórios e timeouts do consumidor. Os checks propostos pela detecção são sugestões. `harness_version` registra a versão usada na criação e não precisa acompanhar a versão do app; alterar esse número não atualiza o projeto. `schema_version` define a compatibilidade do formato.
+4. Valide e execute os checks pertinentes configurados no projeto:
+
+```powershell
+python -P -m harness.runner --project "$projeto" --validate
+python -P -m harness.runner --project "$projeto" --list
+# Execute apenas se existir um check test configurado:
+python -P -m harness.runner --project "$projeto" --check test
+```
+
+O `init` não executa testes. A validação confirma a configuração; os checks verificam o projeto. Projetos no formato antigo (`harness.json`, `planos/` e `memoria/` na raiz) exigem a migração manual descrita em [comportamento do instalador](#comportamento-do-instalador-de-projetos).
+
+### 3. Atualizar projetos com app próprio
+
+**Pacote instalado no ambiente virtual do projeto:** atualizar o app compartilhado não atualiza essa instalação. Use o Python daquele ambiente. Para acompanhar a mesma fonte local em modo editável:
+
+```powershell
+$origem = "C:\caminho\agentic-harness-template"
+$projeto = "C:\caminho\meu-projeto"
+& "$projeto\.venv\Scripts\python.exe" -m pip install --editable "$origem"
+& "$projeto\.venv\Scripts\python.exe" -P -c "import harness; print(harness.__file__); print(harness.__version__)"
+```
+
+Ajuste `.venv` ao nome do ambiente. Para instalações fixadas em SHA ou wheel, mantenha esse modo de distribuição e instale a nova revisão nesse ambiente conforme [distribuição e atualização controlada](#distribuição-e-atualização-controlada). Depois execute o passo 2 usando o Python desse ambiente em todos os comandos. Uma instalação compartilhada não editável também exige reinstalar a revisão desejada no Python compartilhado.
+
+**Pasta `harness/` copiada para o consumidor:** é uma cópia independente. Atualizar a fonte ou o app compartilhado não a modifica. Em cada consumidor:
+
+1. Compare a pasta `harness/` atualizada da fonte com a cópia do projeto e identifique personalizações locais.
+2. Faça backup da cópia antiga. Substitua a pasta pelo código atualizado da fonte e reaplique as personalizações necessárias. Garanta que arquivos removidos na fonte não permaneçam na cópia; copiar por cima pode deixar arquivos obsoletos.
+3. Preserve `AGENTS.md` e `.harness/`. Na raiz do consumidor, execute os comandos abaixo e incorpore `differences` conforme o passo 2:
+
+```powershell
+Set-Location -LiteralPath "C:\caminho\meu-projeto"
+python -c "import harness; print(harness.__file__); print(harness.__version__)"
+python -m harness.installer init .
+python -m harness.runner --validate
+python -m harness.runner --list
+# Execute apenas se existir um check test configurado:
+python -m harness.runner --check test
+```
+
+Neste modo, o caminho exibido deve ser a cópia `harness/` do consumidor. Use `python -m` a partir dele, sem `-P`, para carregar essa cópia.
+
+### 4. Atualizar as skills globais
+
+Após atualizar a fonte, atualize as quatro skills distribuídas pelo projeto. Esta operação é feita uma vez por destino de skills no computador:
+
+```powershell
+$origem = "C:\caminho\agentic-harness-template"
+python -P -m harness.installer skills --source "$origem\skills" --update
+```
+
+Se instalou em outro destino, acrescente `--destination "C:\caminho\das\skills"`. Examine os arquivos atualizados e os backups informados. `--update` não remove skills antigas que deixaram de ser distribuídas; se houver uma instalação anterior de `adversarial-review`, remova essa pasta antiga do destino após conferir seu conteúdo. A revisão agora usa a skill nativa `review-agent` do Codex, que este pacote não instala nem atualiza. Veja também [instalação das skills](#instalar-ou-atualizar-as-skills-globais).
 
 ## Instalação principal: pacote Python compartilhado
 
@@ -75,7 +168,7 @@ if (Test-Path -LiteralPath (Join-Path $projeto "harness")) {
     throw "Já existe uma pasta ou arquivo chamado harness no destino. Confira antes de copiar."
 }
 
-Copy-Item -LiteralPath (Join-Path $origem "harness") -Destination $projeto -Recurse
+Copy-Ptem -LiteralPath (Join-Path $origem "harness") -Destination $projeto -Recurse
 Set-Location -LiteralPath $projeto
 python -m harness.installer init .
 ```
@@ -134,11 +227,11 @@ AGENTS.md
 
 A memória Markdown local, ignorada pelo Git, preserva conhecimento entre sessões, independentemente de linguagem ou plataforma:
 
-| Documento | Critério |
-| --- | --- |
-| `.harness/memoria/regras-negocio.md` | Requisitos e restrições confirmados ou aprovados; prefira referência à fonte oficial. Comportamento observado não constitui regra automaticamente. |
-| `.harness/memoria/problemas-conhecidos.md` | Problemas persistentes relevantes para investigação, discussão ou priorização futura; identifique relatos, hipóteses e reproduções, usando identificador estável e status atualizado, inclusive ao resolver. |
-| `.harness/memoria/decisoes.md` | Somente decisões não evidentes no código, com influência futura, relevância duradoura e risco de retrabalho, erro ou regressão se esquecidas; registre decisão, justificativa, escopo e eventual substituição. |
+| Documento                                  | Critério                                                                                                                                                                                                       |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.harness/memoria/regras-negocio.md`       | Requisitos e restrições confirmados ou aprovados; prefira referência à fonte oficial. Comportamento observado não constitui regra automaticamente.                                                             |
+| `.harness/memoria/problemas-conhecidos.md` | Problemas persistentes relevantes para investigação, discussão ou priorização futura; identifique relatos, hipóteses e reproduções, usando identificador estável e status atualizado, inclusive ao resolver.   |
+| `.harness/memoria/decisoes.md`             | Somente decisões não evidentes no código, com influência futura, relevância duradoura e risco de retrabalho, erro ou regressão se esquecidas; registre decisão, justificativa, escopo e eventual substituição. |
 
 Antes de implementar, consulte somente categorias e seções pertinentes. Registros confiáveis e atuais evitam investigações repetidas, mas não substituem inspeção do código; contradições precisam ser investigadas. Depois das verificações, avalie: a ausência deste registro prejudicaria uma implementação, investigação, entrega ou decisão futura? Se não, não registre. Atualize registros existentes sem duplicação; pendências referenciam o identificador do problema em vez de repetir sua descrição. Bugs triviais resolvidos na sessão e erros transitórios não pertencem à memória, salvo limitação duradoura ou risco relevante de regressão.
 
@@ -158,11 +251,11 @@ python -m harness.installer skills --update
 python -m harness.installer skills --source "C:\caminho\harness-fonte\skills" --destination "C:\Users\User\.agents\skills"
 ```
 
-O destino padrão é `~/.agents/skills/` (por exemplo `C:\Users\User\.agents\skills`). No checkout, a origem padrão é sua pasta `skills/`; ao usar apenas o pacote Python instalado, informe `--source CAMINHO` para a pasta de skills da fonte, ou copie manualmente as cinco pastas. O pacote não procura nem carrega skills ao executar checks ou preparar projetos.
+O destino padrão é `~/.agents/skills/` (por exemplo `C:\Users\User\.agents\skills`). No checkout, a origem padrão é sua pasta `skills/`; ao usar apenas o pacote Python instalado, informe `--source CAMINHO` para a pasta de skills da fonte, ou copie manualmente as quatro pastas. O pacote não procura nem carrega skills ao executar checks ou preparar projetos.
 
 `--destination CAMINHO` permite outro destino, inclusive `~/.codex/skills/` quando esse for o caminho escolhido na máquina. Conteúdos iguais são preservados; conteúdos diferentes são relatados como conflitos. Somente `--update` substitui `SKILL.md`, mantendo uma cópia `SKILL.md.backup-<identificador>` e os demais arquivos da skill. Os testes sempre usam destinos temporários e não alteram as skills globais.
 
-As skills `verified-development`, `code-investigation`, `tdd-implementation` e `http-homologation` foram copiadas das instalações acessíveis em `~/.agents/skills/` e adaptadas ao executor compartilhado. `adversarial-review` não foi encontrada ali nem em `~/.codex/skills/`; foi escrita para este pacote. Todas identificam sua versão em `metadata.version`. O coordenador exige investigação, testes e revisão em execução independente; HTTP só se aplica a interfaces afetadas. Commits e deploys dependem de autorização explícita do desenvolvedor.
+As quatro skills `verified-development`, `code-investigation`, `tdd-implementation` e `http-homologation` foram copiadas das instalações acessíveis em `~/.agents/skills/` e adaptadas ao executor compartilhado. Todas identificam sua versão em `metadata.version`. Para revisão adversarial, o coordenador utiliza diretamente a skill nativa `review-agent` do Codex, que não é distribuída nem instalada por este pacote. Se a skill ou a execução independente não estiver disponível, a revisão deve ser registrada como não realizada. O coordenador exige investigação, testes e revisão em execução independente; HTTP só se aplica a interfaces afetadas. Commits e deploys dependem de autorização explícita do desenvolvedor.
 
 ## Configuração v1
 
@@ -262,7 +355,7 @@ Para atualizar intencionalmente uma instalação fixada em SHA, selecione a nova
 python -m pip install --upgrade --force-reinstall "git+https://github.com/arthur-mendonca/agentic-harness-template.git@<NOVO_SHA_COMPLETO>"
 ```
 
-`--force-reinstall` permite trocar de revisão mesmo quando o número da versão do pacote permanece igual. Atualize também a revisão registrada em `requirements-harness.txt`, se utilizado. Para wheels, selecione e instale o novo arquivo explicitamente. Com uma instalação editável, atualizar o checkout já atualiza o código usado pelo executável. A configuração do consumidor não precisa mudar quando `harness_version` mudar; valide com `harness --validate` e execute os checks relevantes, como `harness --check test`. Instale skills atualizadas somente pela operação `skills --update`, examinando conflitos e backups. Instalar/atualizar o pacote não modifica skills globais. Não use uma referência móvel como única fixação de versão em instalações de release. A versão deve ser incrementada quando o conteúdo distribuído mudar.
+`--force-reinstall` permite trocar de revisão mesmo quando o número da versão do pacote permanece igual. Atualize também a revisão registrada em `requirements-harness.txt`, se utilizado. Para wheels, selecione e instale o novo arquivo explicitamente. Com uma instalação editável, atualizar o checkout atualiza o código Python usado pelo executável; mudanças em metadados, dependências ou comandos exigem repetir a instalação editável. Depois atualize os controles de cada consumidor conforme [a rotina por projeto](#2-atualizar-os-arquivos-de-cada-projeto-consumidor). A configuração do consumidor não precisa mudar quando `harness_version` mudar; valide com `harness --validate` e execute os checks relevantes, como `harness --check test`. Instale skills atualizadas somente pela operação `skills --update`, examinando conflitos e backups. Instalar/atualizar o pacote não modifica skills globais. Não use uma referência móvel como única fixação de versão em instalações de release. A versão deve ser incrementada quando o conteúdo distribuído mudar.
 
 ## Verificação do pacote
 

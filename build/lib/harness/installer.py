@@ -13,7 +13,7 @@ from harness import __version__
 from harness.config import ConfigError, contained_path, load_config, read_json, validate_config
 from harness.project import PROJECT_FILES
 
-SKILLS = ("verified-development", "code-investigation", "tdd-implementation", "adversarial-review", "http-homologation")
+SKILLS = ("verified-development", "code-investigation", "tdd-implementation", "http-homologation")
 CONVENTIONAL = ("prepare", "lint", "types", "test", "build")
 
 
@@ -210,7 +210,7 @@ def main(argv=None):
     subparsers = parser.add_subparsers(dest="operation", required=True)
     init = subparsers.add_parser("init", help="Inspect and prepare an existing project directory")
     init.add_argument("project")
-    skills = subparsers.add_parser("skills", help="Explicitly install the five global Agent Skills")
+    skills = subparsers.add_parser("skills", help="Explicitly install the four global Agent Skills")
     skills.add_argument("--source", help="Source skills directory; default: skills/ next to the source harness directory")
     skills.add_argument("--destination", help="Default: ~/.agents/skills/")
     skills.add_argument("--update", action="store_true", help="Replace differing SKILL.md files, preserving backups")

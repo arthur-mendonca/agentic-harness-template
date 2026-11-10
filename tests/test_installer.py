@@ -147,7 +147,8 @@ class InstallerTests(unittest.TestCase):
         init_project(self.root)
         self.assertFalse(destination.exists())
         first = install_skills(destination)
-        self.assertEqual(len(first["created"]), 5)
+        self.assertEqual(set(first["created"]), {"verified-development", "code-investigation", "tdd-implementation", "http-homologation"})
+        self.assertEqual({path.name for path in destination.iterdir()}, set(first["created"]))
         target = destination / "code-investigation" / "SKILL.md"
         target.write_text("my custom skill", encoding="utf-8")
         extra = target.parent / "extra.md"
@@ -164,19 +165,19 @@ class InstallerTests(unittest.TestCase):
         with patch("harness.installer.Path.home", return_value=self.root):
             summary = install_skills()
         self.assertEqual(Path(summary["destination"]), self.root / ".agents" / "skills")
-        self.assertEqual(len(summary["created"]), 5)
+        self.assertEqual(len(summary["created"]), 4)
         self.assertFalse((self.root / ".codex").exists())
 
     def test_explicit_skill_source_and_missing_source_preserve_destination(self):
         source = self.root / "source-skills"
         source.mkdir()
-        names = ("verified-development", "code-investigation", "tdd-implementation", "adversarial-review", "http-homologation")
+        names = ("verified-development", "code-investigation", "tdd-implementation", "http-homologation")
         for name in names:
             (source / name).mkdir()
             (source / name / "SKILL.md").write_text(f"Independent source for {name}", encoding="utf-8")
         destination = self.root / "destination-skills"
         summary = install_skills(destination, source=source)
-        self.assertEqual(len(summary["created"]), 5)
+        self.assertEqual(len(summary["created"]), 4)
         self.assertEqual((destination / names[0] / "SKILL.md").read_text(encoding="utf-8"), f"Independent source for {names[0]}")
         missing_destination = self.root / "not-created"
         with self.assertRaises(ConfigError):

@@ -21,7 +21,7 @@ description: Coordena implementação de funcionalidades e correção de bugs co
 
 4. Examine `.harness/harness.json` e `python -m harness.runner --list`, quando configurados. Execute apenas checks pertinentes, selecionados explicitamente com `python -m harness.runner --check NOME` (repita `--check` para vários). Registre comandos, códigos de saída e os JSON/logs de `.harness/results/`. `unconfigured` e `not_run` nunca equivalem a `passed`. Não configure nem execute preparação que instale dependências sem autorização.
 
-5. Solicite `adversarial-review` em execução independente da implementação, fornecendo os requisitos originais e o diff. O revisor deve utilizar a skill `review-agent` do Codex, quando disponível, analisar os testes relevantes e não modificar arquivos.
+5. Solicite revisão adversarial em execução independente da implementação usando a skill nativa `review-agent` do Codex, fornecendo os requisitos originais e o diff. O revisor deve analisar os testes relevantes e não modificar arquivos. Essa skill é fornecida pelo Codex e não é instalada por este pacote. Se a skill ou a execução independente não estiver disponível, registre a revisão como não realizada.
 
 6. Encaminhe findings P0, P1 e P2 ao implementador para correção. Reexecute os testes afetados e solicite outra revisão independente. Respeite os limites de ciclos definidos no projeto; na ausência deles, faça no máximo três ciclos de correção/revisão e registre findings remanescentes. Não declare a revisão aprovada enquanto houver findings P0, P1 ou P2 não resolvidos. Se a revisão independente não estiver disponível, registre-a como não realizada.
 
