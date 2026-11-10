@@ -115,16 +115,20 @@ def init_project(project):
     root = Path(project).expanduser().resolve()
     if not root.is_dir():
         raise ConfigError(f"Destination must be an existing directory: {root}")
-    _preflight(root, (*PROJECT_FILES, "harness.json", ".gitignore"), ("planos", "memoria", ".harness", ".harness/results"))
+    _preflight(root, (*PROJECT_FILES, ".harness/harness.json", "harness.json", ".gitignore"), (".harness", ".harness/planos", ".harness/memoria", ".harness/results"))
     inspection, checks = inspect_project(root)
     config = {"schema_version": 1, "harness_version": __version__, "project": root.name, "checks": checks}
     validate_config(config, root)
-    if (root / "harness.json").exists():
+    if (root / "harness.json").exists() or (root / ".harness/harness.json").exists():
         load_config(root)  # Fail before writing anything if the preserved config is incompatible.
     proposals = dict(PROJECT_FILES)
-    proposals["harness.json"] = json.dumps(config, ensure_ascii=False, indent=2) + "\n"
+    for directory in ("planos", "memoria"):
+        if (root / directory).exists() and not (root / ".harness" / directory).exists():
+            proposals = {name: text for name, text in proposals.items() if not name.startswith(f".harness/{directory}/")}
+    if not (root / "harness.json").exists() or (root / ".harness/harness.json").exists():
+        proposals[".harness/harness.json"] = json.dumps(config, ensure_ascii=False, indent=2) + "\n"
     summary = {"root": str(root), "created": [], "preserved": [], "updated": [], "differences": {},
-               "legacy_files": [name for name in ("planos/novo-mapa.md", "tarefas/pendencias.md") if (root / name).is_file()],
+               "legacy_files": [name for name in ("harness.json", "planos", "memoria", "tarefas/pendencias.md") if (root / name).exists()],
                "inspection": inspection, "configured": [], "pending": [], "valid": False, "checks_executed": False}
     # Read and compare all preserved files before mutating the destination.
     for name, text in proposals.items():
@@ -139,7 +143,8 @@ def init_project(project):
     ignore_existed = ignore.exists()
     previous_ignore = ignore.read_bytes() if ignore_existed else b""
     patterns = [line.strip() for line in previous_ignore.decode("utf-8-sig").splitlines() if line.strip() and not line.lstrip().startswith("#")]
-    for relative in ("planos", "memoria", ".harness/results"):
+    directories = {str(Path(name).parent).replace("\\", "/") for name in proposals if "/" in name}
+    for relative in sorted(directories | {".harness/results"}):
         path = root / relative
         if not path.exists():
             path.mkdir(parents=True, exist_ok=True)
