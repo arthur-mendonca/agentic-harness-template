@@ -298,7 +298,14 @@ $sdd-off Corrija este texto sem criar documentos.
 
 ### ETAPA 9 — Limpeza do layout, documentação e testes de regressão
 
-**Status** · Implementação e verificação local realizadas: 172 testes aprovados no Windows com Python 3.14, incluindo wheel novo e cópia isolada com os quatro modos e migração legada. Revisão independente do diff e da minuta de entrega concluída sem findings P0–P2. A matriz Windows/Linux × Python 3.11–3.14 permanece parcialmente não verificada: as outras sete combinações exigem execução da CI. Somente Python 3.14 está disponível localmente; Docker sem daemon e WSL sem distribuição de desenvolvimento. A etapa não está integralmente validada enquanto essa pendência permanecer.
+**Status** · Implementada e validada nas oito combinações Windows/Linux × Python 3.11–3.14. A [execução 44602044311 da CI](https://github.com/arthur-mendonca/agentic-harness-template/actions/runs/44602044311), sobre o commit `fd5621105cb245abba75b74a3c097913bfea1668`, terminou com sucesso em 19/11/2026. Cada job construiu o wheel e verificou pacote, cópia isolada, modos SDD e migração legada. No Windows, passaram os 172 testes por versão; no Linux, passaram 171, com um teste exclusivo de normalização de caminhos Windows ignorado por plataforma e aprovado nos quatro jobs Windows. Revisão independente da implementação e da explicação concluída sem findings P0–P2.
+
+| Plataforma | Python 3.11 | Python 3.12 | Python 3.13 | Python 3.14 |
+|---|---|---|---|---|
+| Windows | 172 aprovados | 172 aprovados | 172 aprovados | 172 aprovados |
+| Linux | 171 aprovados + 1 ignorado | 171 aprovados + 1 ignorado | 171 aprovados + 1 ignorado | 171 aprovados + 1 ignorado |
+
+Logs e resumo conferidos ficam localmente em `.harness/validation-ci-44602044311/`. A validação está vinculada ao commit indicado; as atualizações posteriores deste plano registram o encerramento e não alteram o código validado.
 
 **Objetivo:** eliminar conceitos duplicados do fluxo ativo sem perder conhecimento relevante nem quebrar instalações antigas.
 
@@ -308,7 +315,7 @@ $sdd-off Corrija este texto sem criar documentos.
 - [x] Preservar memória de regras, decisões e problemas, e `results/`; conferir que uma instalação limpa não gera documentos legados.
 - [x] Atualizar o CLI e o README com modos, migração, backup, uso por skills, rastreabilidade e limites das verificações.
 - [x] Explicar claramente o uso `$sdd-lite`/`$sdd-full` e a situação distinta de atalhos slash.
-- [ ] Validar Python 3.11–3.14 e Windows/Linux, conforme matriz de CI existente.
+- [x] Validar Python 3.11–3.14 e Windows/Linux, conforme matriz de CI existente.
 - [x] Conferir instalação por pacote e por cópia, comportamento sem skills globais, atualização da instalação Python versus atualização do projeto, e preservação das skills antigas.
 - [x] Inspecionar empacotamento para garantir que novas fontes/skills sejam distribuídas no fluxo apropriado, sem dependência de runtime adicional não autorizada.
 - [x] Manter documentação do **próprio repositório da ferramenta** no Git, se desejado; o bloqueio de commit automático se refere aos artefatos gerados nos repositórios consumidores.
@@ -386,17 +393,19 @@ A validação semântica e a convergence real são executadas pelo **agente**; c
 
 A nova versão só está pronta quando:
 
-- [ ] Atualiza projetos antigos de modo verificável, conservador, idempotente e com backup; relatórios antigos não alimentam mais o contexto ativo, mas seus achados úteis são preservados.
-- [ ] `project_legacy` deixou de ser dependência; importar e testar `project_update` funciona.
-- [ ] `auto`, `lite`, `full` e `off` funcionam com invocação explícita por skills e política automática coerente.
-- [ ] Cada tarefa gerenciada possui pasta própria; `lite` não exige três documentos; `off` não exige documentos.
-- [ ] `spec.md`, `plan.md`, `tasks.md` possuem responsabilidades distintas, IDs estáveis e verificações de rastreabilidade.
-- [ ] Convergence identifica lacunas, conserva a diferença entre `atendido` e `não verificado`, e impede conclusões falsas.
-- [ ] Problemas e sugestões relevantes fora de escopo são registrados sem correção automática ou duplicações.
-- [ ] O relatório final na conversa explica **as decisões técnicas relevantes do código**, com nomes concretos, funcionamento e consequências; o revisor confere sua fidelidade ao diff.
-- [ ] As quatro skills e o executor de checks existentes continuam funcionando.
-- [ ] Não há commits, staging, push, deploy nem inclusão automática de documentação do harness nos repositórios consumidores.
-- [ ] Não são gerados registros artificiais ou Markdown dispensável; conhecimento duradouro é preservado seletivamente.
+- [x] Atualiza projetos antigos de modo verificável, conservador, idempotente e com backup; relatórios antigos não alimentam mais o contexto ativo, mas seus achados úteis são preservados.
+- [x] `project_legacy` deixou de ser dependência; importar e testar `project_update` funciona.
+- [x] `auto`, `lite`, `full` e `off` funcionam com invocação explícita por skills e política automática coerente.
+- [x] Cada tarefa gerenciada possui pasta própria; `lite` não exige três documentos; `off` não exige documentos.
+- [x] `spec.md`, `plan.md`, `tasks.md` possuem responsabilidades distintas, IDs estáveis e verificações de rastreabilidade.
+- [x] Convergence identifica lacunas, conserva a diferença entre `atendido` e `não verificado`, e impede conclusões falsas.
+- [x] Problemas e sugestões relevantes fora de escopo são registrados sem correção automática ou duplicações.
+- [x] O relatório final na conversa explica **as decisões técnicas relevantes do código**, com nomes concretos, funcionamento e consequências; o revisor confere sua fidelidade ao diff.
+- [x] As quatro skills e o executor de checks existentes continuam funcionando.
+- [x] Não há commits, staging, push, deploy nem inclusão automática de documentação do harness nos repositórios consumidores.
+- [x] Não são gerados registros artificiais ou Markdown dispensável; conhecimento duradouro é preservado seletivamente.
+
+**Conferência final — 19/11/2026:** suíte completa e empacotamento aprovados nas oito combinações da CI referenciada na etapa 9. Migração/preservação: `test_migration`, `test_project_update` e cenário compartilhado de distribuição; modalidades e isolamento: `test_tasks` e cinco execuções reais da etapa 4; contratos e convergence: `test_specs` e `test_convergence`; achados/memória: `test_findings` e `test_memory`; explicação: cenário executável `test_explanation`, geração independente e revisão de cinco minutas da etapa 8; preservação das skills/executor: `test_installer`, `test_runner` e `test_update`. A conferência cobre esses contratos e cenários observados; relevância semântica, fidelidade de explicações e autorização continuam responsabilidades do agente/revisor em cada tarefa futura.
 
 ---
 
