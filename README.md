@@ -167,6 +167,16 @@ Em `criteria`, use `met` (atendido), `divergent` (divergente), `unverified` (nã
 
 Para concluir, todos os critérios precisam de avaliação atual com evidência, os passos devem estar concluídos e a revisão deve estar livre de impedimentos. Alterações nos documentos ou nas evidências vinculadas invalidam a conclusão até nova avaliação. Depois de mudar a implementação, reexecute os checks afetados e atualize a avaliação.
 
+### Explicação técnica e revisão antes do encerramento
+
+Depois dos checks e da convergence, `verified-development` prepara a explicação final com comportamento anterior e novo, funções/arquivos reais, funcionamento, motivos, consequências e poucas partes que mereçam inspeção humana. A extensão acompanha o impacto da mudança, inclusive em `lite` e `off`. A explicação pertence à conversa; não há `explanation.md` obrigatório.
+
+O revisor independente recebe requisitos, diff atual incluindo arquivos novos, testes/evidências e minuta. Confere afirmações e omissões contra o código: por exemplo, três chamadas à Distance Matrix precisam aparecer com condições, razão, efeito em volume/custo potencial e medições ausentes. Uma contagem de chamadas não comprova faturamento. Findings podem exigir corrigir código ou texto; só alterações de código exigem reexecutar checks, seguidos de nova convergence e revisão. A revisão da minuta compartilha o limite de ciclos já utilizado na tarefa.
+
+Sem revisor, a revisão da explicação fica `não realizada`, conforme a política de bloqueio ou dispensa do projeto. A revisão do próprio implementador não é independente. Em `full`, `review.status` e `review.reason` refletem também essa etapa antes de concluir. O Python não julga a qualidade ou fidelidade da explicação.
+
+Os cenários reproduzíveis de qualidade ficam em `tests/fixtures/explanation/`, com comportamento observado por `python -B -m unittest tests.test_explanation -v`. Esses testes conferem contagem, condições e falhas com cliente falso; a avaliação independente das minutas verifica seu significado e não é substituída por busca de palavras em Markdown.
+
 ## Instalação principal: pacote Python compartilhado
 
 Instale o harness diretamente do repositório Git, preferencialmente em um ambiente virtual ativo:

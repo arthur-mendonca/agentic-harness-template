@@ -1,15 +1,15 @@
 ---
 name: verified-development
 metadata:
-  version: "0.8.0"
-description: Coordena migração de controles, investigação, TDD, verificações automatizadas, revisão independente, convergence e homologação HTTP quando aplicável. Use ao receber uma funcionalidade ou correção que precisa de evidências verificáveis.
+  version: "0.9.0"
+description: Coordena migração de controles, investigação, TDD, checks, convergence e explicação técnica conferida em revisão independente, com homologação HTTP quando aplicável. Use ao receber uma funcionalidade ou correção que precisa de evidências verificáveis.
 ---
 
 # Desenvolvimento verificável
 
 **Entrada:** solicitação de funcionalidade ou bug, repositório acessível e restrições do usuário.
 
-**Saída:** alterações controladas e relatório curto com evidências, riscos e pendências.
+**Saída:** alterações controladas e explicação técnica na conversa, com evidências, riscos e pendências.
 
 ## Fluxo de execução
 
@@ -38,14 +38,14 @@ description: Coordena migração de controles, investigação, TDD, verificaçõ
 
 5. Quando a alteração afetar uma interface HTTP, use `http-homologation` para preparar os casos de teste e gerar ou atualizar coleções Postman, quando aplicável. Execute os testes HTTP somente quando houver ambiente disponível e autorização necessária. Registre impedimentos que afetem critérios de aceite.
 
-6. Compare cada critério de aceite com o código, o diff, a verificação planejada e os resultados obtidos. Use a revisão aprovada da especificação quando houver, respeitando qualquer decisão pendente. Em `full`, consulte `sdd trace ID`. Em `lite`, use os critérios de `tarefa.md`. Solicite revisão adversarial em execução independente com a skill nativa `review-agent` do Codex. Forneça os requisitos, o diff, as associações por critério e os resultados. O revisor procura regressões e faltas de cobertura sem modificar arquivos. Registre explicitamente quando a revisão estiver indisponível.
+6. Compare cada critério de aceite com o código, o diff, a verificação planejada e os resultados obtidos. Use a revisão aprovada da especificação quando houver, respeitando qualquer decisão pendente. Em `full`, consulte `sdd trace ID`. Em `lite`, use os critérios de `tarefa.md`. Solicite revisão adversarial em execução independente, com a skill nativa `review-agent` do Codex quando disponível, ou outro revisor independente disponível. Forneça os requisitos, o diff real (incluindo arquivos novos), as associações por critério e os resultados. O revisor procura regressões e faltas de cobertura sem modificar arquivos. A revisão da explicação final ainda ocorrerá no passo 10. Registre explicitamente quando a revisão estiver indisponível.
 
 7. Classifique cada critério como atendido (`met`), divergente (`divergent`), não verificado (`unverified`) ou bloqueado (`blocked`). Justifique com observações do código, testes ou verificações manuais. Um check verde só sustenta critérios que ele cobre. Para um critério de custo de API, distinga contagem de chamadas e elementos, SKU e preço. Se faltarem medições ou simulações pertinentes, registre a limitação.
 
    - Em `full`, copie o objeto `contract` de `sdd verify ID` após atualizar os documentos. Prepare um JSON temporário com esse objeto, `criteria` (objeto indexado por `AC-...`) e `review`. Cada critério contém `status`, `reason` e `evidence`. Em `evidence`, use `{"report":".harness/results/ARQUIVO.json","check":"NOME"}` para um resultado do runner, ou `{"file":"CAMINHO_RELATIVO"}` para um registro manual com procedimento e resultado observado. Repita referências conforme necessário para cobrir partes distintas do mesmo critério. Use `[]` quando houver lacuna de evidência.
    - Em `review`, registre `status` e `reason`. Use `passed` para revisão independente sem findings impeditivos, `findings` para findings pendentes, `not_performed` quando a revisão estiver indisponível e a política permitir prosseguir, ou `blocked` quando a revisão for exigida e estiver impedida. Documente no motivo qualquer dispensa autorizada. A verificação do implementador nunca equivale a uma revisão independente.
    - Use `sdd verify ID --assessment CAMINHO` para registrar a avaliação, inclusive quando o código de saída for 1 por haver critérios ou impedimentos em aberto. Divergências corrigíveis dentro do escopo e findings P0, P1 e P2 retornam ao implementador. Reexecute as verificações afetadas, confira novamente os critérios e solicite nova revisão independente. Respeite o limite configurado pelo projeto, com até três ciclos de correção e revisão por padrão. Preserve os testes e os requisitos autorizados. Alterações substantivas de requisitos exigem autorização própria.
-   - Encerre em `full` com `sdd set-status ID completed` somente quando a avaliação atual exibir `ready: true`, com todos os critérios atendidos e os impedimentos resolvidos ou explicitamente dispensados conforme a política. Em `lite`, aplique a mesma regra de encerramento aos critérios essenciais escritos em `tarefa.md`. Registre o que ficou divergente, impedido ou sem verificação quando atingir o limite de ciclos.
+   - Prepare a conclusão em `full` somente quando a avaliação atual exibir `ready: true`, com todos os critérios atendidos e os impedimentos resolvidos ou explicitamente dispensados conforme a política. Em `lite`, aplique a mesma regra aos critérios essenciais escritos em `tarefa.md`. Registre o que ficou divergente, impedido ou sem verificação quando atingir o limite de ciclos. Finalize o estado da tarefa somente após o passo 10.
 
 8. Em trabalho gerenciado, após as verificações, avalie: A ausência deste registro prejudicaria uma implementação, investigação, entrega ou decisão futura? Se não, não registre. A avaliação não obriga a editar arquivos. Siga os critérios dos documentos gerados: regras confirmadas ou aprovadas em `.harness/memoria/regras-negocio.md`; problemas persistentes e atualizações de status em `.harness/memoria/problemas-conhecidos.md`; decisões não evidentes, com impacto futuro e risco de retrabalho ou regressão se ausentes, em `.harness/memoria/decisoes.md`. Atualize sem duplicações, distinguindo fatos, decisões aprovadas e questões abertas. Não altere comportamento esperado sem autorização nem corrija problemas fora do escopo.
 
@@ -56,6 +56,27 @@ description: Coordena migração de controles, investigação, TDD, verificaçõ
    - Use `python -m harness sdd finding --input CAMINHO --mode lite|full` com a modalidade vigente. O Python valida referências e campos, reúne evidências/origens e atualiza o mesmo ID; não avalia relevância semântica nem comprova a afirmação do agente. `ignored` indica que nada foi registrado: confira o motivo, sem inventar evidência para superar o filtro. JSON temporário de entrada não é um novo documento obrigatório da tarefa; remova-o quando não for mais necessário.
    - Use `persistent: true` para problemas duradouros que afetem tarefas futuras: o conteúdo completo fica em `.harness/memoria/problemas-conhecidos.md`, com ID `PROB-...`. Em `.harness/pendencias.md` ficam referência, estado, categoria, ação e origem, sem repetir descrição ou evidências. Ao resolver ou descartar, atualize a identidade existente. Uma falha entre a escrita da memória e da referência pode ser recuperada repetindo o mesmo comando. Não copie o problema para regras de negócio.
    - Em `off`, relate achados e pendências na conversa, sem gerar arquivos de gestão. Preserve JSON e logs dos checks em `.harness/results/`. Apresente resultados, comandos, limitações e verificações impedidas na conversa.
+
+10. Depois dos checks e da convergence, prepare a minuta da explicação final conforme o contrato abaixo. Isso também se aplica a `off` e `lite`, com extensão proporcional à mudança. Planejamento ou atualização de progresso não substitui esta explicação. Encaminhe a minuta para revisão independente antes de declarar a tarefa concluída.
+
+   - Entregue ao revisor os requisitos relevantes, o diff real atual com arquivos novos, os testes/evidências e a minuta. Dê acesso de leitura; ele não modifica a implementação. O revisor pode ser o mesmo que já revisou o código, desde que seja independente do implementador. A autoavaliação do implementador nunca conta como revisão independente.
+   - O revisor confronta nomes reais, fluxo, condições, contagem de operações, trade-offs e riscos com o código e os resultados. Procura afirmações falsas e efeitos relevantes omitidos, inclusive quando os testes estão verdes. Para cada finding, aponta a afirmação ou omissão, a evidência em arquivo/função e a correção necessária na implementação ou na explicação.
+   - Se o finding exigir código, corrija dentro do escopo, reexecute os checks afetados e a convergence e reapresente diff, evidências e minuta atualizados. Se exigir apenas texto, corrija a explicação e reapresente-a sem repetir checks de código inalterado. Respeite o limite de ciclos já definido no passo 7; não reinicie a contagem para a minuta. Com findings impeditivos remanescentes, relate a divergência e não anuncie conclusão.
+   - Se o revisor estiver indisponível, informe `não realizada` para a revisão da explicação, nunca `aprovada`. Preserve a diferença entre revisão do código realizada e explicação não revisada. Respeite a política de bloqueio ou dispensa já definida no passo 7. Em `full`, atualize `review.status` e `review.reason` na avaliação existente para refletir também a revisão da minuta; não invente um novo schema de evidência ou uma aprovação automática pelo Python.
+   - Alterações posteriores que afetem comportamento, evidências ou afirmações técnicas exigem atualizar a explicação e revalidar a parte afetada. Só então, se os critérios e a política de revisão permitirem, encerre em `full` com `sdd set-status ID completed`; em `lite`, conclua pelos critérios essenciais. Entregue a explicação revisada na conversa. Não crie `explanation.md` nem outro Markdown obrigatório; decisões duradouras seguem apenas os critérios seletivos de memória do passo 8.
+
+## Contrato da explicação técnica
+
+Priorize as decisões que o desenvolvedor precisa entender para avaliar o código. Em mudanças pequenas, poucos períodos podem bastar; não descreva boilerplate nem percorra todos os arquivos. Cubra o que for relevante, em prosa ou lista curta:
+
+- **Comportamento:** o que ocorria antes e o que passa a ocorrer.
+- **Onde e como:** funções e arquivos reais, sequência de operações e condições que mudam o fluxo.
+- **Motivo:** por que a estratégia atende ao requisito, alternativas relevantes descartadas e condições da decisão. Não invente alternativas que não foram consideradas.
+- **Consequências:** chamadas externas e volume de operações, consultas SQL, loops, cache/invalidação, recursos, concorrência, segurança, contratos e complexidade, conforme afetados. Quantifique quando possível e distinga medição, cálculo e estimativa. Não deduza custo faturado apenas de contagem de requisições; considere elementos e SKU quando houver evidência.
+- **Inspeção humana:** indique poucas funções ou partes do código cuja decisão justifique leitura posterior, explicando o que conferir.
+- **Evidências e incertezas:** verificações efetivamente executadas, o que cobrem e o que não foi medido ou permanece hipótese, incluindo a disponibilidade da revisão independente.
+
+Exemplo de fidelidade: se `calculateBestDistance()` chama Distance Matrix três vezes, diga explicitamente que são **três chamadas**, em quais condições ocorrem, por que são necessárias e o efeito em volume e custo potencial. Identifique também caminhos de uma chamada, cache ou falha antecipada se existirem no diff. Informe o que não foi medido, como latência e faturamento real. “Otimização de cálculo de distância com maior precisão” não satisfaz esse contrato. O revisor confere a implementação real; esta ilustração não determina como implementar a função.
 
 ## Limites e restrições
 
@@ -70,9 +91,9 @@ description: Coordena migração de controles, investigação, TDD, verificaçõ
 
 ## Relatório final
 
-- **Alterações:** arquivos e comportamentos modificados.
+- **Explicação técnica:** comportamento, funções/arquivos relevantes, funcionamento, motivo, consequências e pontos para inspeção humana, conforme o contrato acima.
 - **Testes:** comandos executados, resultados reais e verificações não executadas.
-- **Revisão adversarial:** resultado da revisão independente, findings remanescentes ou impossibilidade de execução.
+- **Revisão adversarial:** resultado da revisão independente do código e da minuta da explicação, findings remanescentes ou impossibilidade de execução.
 - **Homologação HTTP:** resultado, pendências ou não aplicável.
 - **Riscos e pendências:** limitações, decisões humanas e próximos passos necessários.
 

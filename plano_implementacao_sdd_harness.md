@@ -267,6 +267,8 @@ $sdd-off Corrija este texto sem criar documentos.
 
 ### ETAPA 8 — Explicação técnica pós-implementação e verificação pelo revisor
 
+**Status** · Implementada e verificada com 171 testes no Windows com Python 3.14. Avaliações independentes reais com a skill instalada produziram uma explicação fiel e revisaram cinco minutas: quatro retornaram para correção e a fiel foi aceita. Revisão independente do diff e da minuta de entrega concluída sem findings P0–P2. Os testes Python validam o cenário executável; o julgamento semântico permanece com o agente e o revisor, sem garantia de sessões futuras.
+
 **Objetivo:** fornecer ao desenvolvedor uma explicação útil do código gerado, sem exigir leitura integral do diff.
 
 **Arquivos principais:** `skills/verified-development/SKILL.md`, protocolo de revisão independente e testes/evals de formato e fidelidade.
