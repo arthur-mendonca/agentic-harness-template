@@ -107,6 +107,31 @@ Cada tarefa fica em `.harness/tarefas/<número>-<slug>/` e aceita consulta e ret
 
 `set-status` aceita `open`, `in_progress`, `blocked`, `verified` e `completed`. Para `verified`, use `--evidence .harness/results/ARQUIVO.json` com checks selecionados e aprovados ou `--manual-evidence CAMINHO_RELATIVO` para um registro existente de verificação manual. O gerenciador registra as evidências informadas. A avaliação dos critérios de aceite pertence ao fluxo de verificação da tarefa.
 
+### Contrato e rastreabilidade em modo full
+
+Preencha as seções geradas. Os IDs são locais à tarefa. Preserve os IDs ao editar um item e use `sdd allocate-id ID REQ`, `AC` ou `T` para reservar um novo identificador. Use estas linhas nas seções indicadas:
+
+| Documento e seção | Entrada |
+| --- | --- |
+| `spec.md` · Requisitos | `- REQ-001: Exibir o rótulo com acento.` |
+| `spec.md` · Critérios de aceite | `- AC-001 (REQ-001): A tela exibe Usuário.` |
+| `plan.md` · Verificações planejadas | `- AC-001: Abrir a tela e conferir o rótulo.` |
+| `tasks.md` · Passos | `- [ ] T-001 (REQ-001, AC-001): Corrigir o texto no recurso de idioma.` |
+| `tasks.md` · Verificação | `- T-001: Rótulo conferido em duas resoluções.` |
+
+Registre as entradas no nível principal da lista. Em `Impactos` do plano, descreva os efeitos relevantes em custo, desempenho ou operação. O passo pode referenciar vários IDs separados por vírgula. Ao terminá-lo, use `[x]` e registre sua verificação. Para indicar um teste a criar, escreva o caminho em código no texto. Links Markdown locais devem apontar para arquivos existentes, com âncoras válidas nos documentos Markdown.
+
+```console
+python -m harness sdd validate 001
+python -m harness sdd trace 001
+python -m harness sdd await-decision 001
+python -m harness sdd approve 001
+```
+
+`validate` localiza inconsistências por arquivo e linha. `trace` mostra as ligações entre requisitos, critérios, verificações planejadas e passos em JSON. Ambos retornam código 1 em caso de inconsistência. Para concluir uma tarefa full, o contrato deve estar válido e os passos concluídos, com as verificações registradas. Se o trio mudar após a conclusão, o CLI mostra a verificação anterior como `verified` até que o novo contrato seja validado e concluído. A revisão semântica do agente avalia se o texto é claro, autorizado e verificável.
+
+O estado da especificação é separado do andamento da tarefa. Use `await-decision` quando houver uma decisão substantiva pendente. O usuário pode confirmar a revisão exibida por `approve` em um terminal interativo. O registro local fica vinculado ao SHA-256 de `spec.md` e depende do controle de acesso ao terminal e aos arquivos do projeto. Uma revisão diferente exige nova confirmação quando a tarefa já tinha aprovação. Um rascunho validado pode seguir dentro do escopo já autorizado.
+
 ## Instalação principal: pacote Python compartilhado
 
 Instale o harness diretamente do repositório Git, preferencialmente em um ambiente virtual ativo:

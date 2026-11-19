@@ -7,6 +7,7 @@ import sys
 from harness.config import discover_root, load_config
 from harness.migration import require_tasks_ready
 from harness.sdd_policy import MODES, choose_mode, parse_risks
+from harness.specs import KINDS
 from harness.tasks import STATES, TaskStore
 
 
@@ -38,13 +39,21 @@ def main(argv=None):
     change.add_argument("status", choices=STATES)
     change.add_argument("--evidence", action="append", default=[], metavar="PATH")
     change.add_argument("--manual-evidence", action="append", default=[], metavar="PATH")
-    for command in (new, listing, status, resume, mode, change):
+    validate = commands.add_parser("validate", help="Validate the full task Markdown contract")
+    tracing = commands.add_parser("trace", help="Show requirements, criteria, planned checks and steps")
+    allocate = commands.add_parser("allocate-id", help="Reserve a document identifier within a full task")
+    awaiting = commands.add_parser("await-decision", help="Record that a specification needs a substantive decision")
+    approve = commands.add_parser("approve", help="Confirm a specification revision in an interactive terminal")
+    for command in (validate, tracing, allocate, awaiting, approve):
+        command.add_argument("id")
+    allocate.add_argument("kind", choices=KINDS)
+    for command in (new, listing, status, resume, mode, change, validate, tracing, allocate, awaiting, approve):
         command.add_argument("--project", default=argparse.SUPPRESS, help="Exact project root")
     args = parser.parse_args(argv)
     try:
         result = _dispatch(args)
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0
+        return 1 if args.command in ("validate", "trace") and not result["valid"] else 0
     except (OSError, ValueError) as exc:
         print(f"SDD error: {exc}", file=sys.stderr)
         return 2
@@ -72,4 +81,15 @@ def _dispatch(args):
         return store.status(args.id)
     if args.command == "resume":
         return store.resume(args.id)
+    if args.command in ("validate", "trace"):
+        contract = store.contract(args.id)
+        if args.command == "validate":
+            contract.pop("requirements")
+        return contract
+    if args.command == "allocate-id":
+        return store.allocate_id(args.id, args.kind)
+    if args.command == "await-decision":
+        return store.await_decision(args.id)
+    if args.command == "approve":
+        return store.approve(args.id)
     return store.set_status(args.id, args.status, args.evidence, args.manual_evidence)

@@ -1,7 +1,7 @@
 ---
 name: verified-development
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
 description: Coordena migração de controles, investigação, TDD, verificações automatizadas, revisão independente e homologação HTTP quando aplicável. Use ao receber uma funcionalidade ou correção que precisa de evidências verificáveis.
 ---
 
@@ -30,7 +30,9 @@ description: Coordena migração de controles, investigação, TDD, verificaçõ
 
    - Em projeto preparado, use `python -m harness sdd list` e `python -m harness sdd resume ID` para retomar o mesmo trabalho. Para uma nova tarefa, use `python -m harness sdd new --title "Título"` e passe `--mode MODO` quando houver escolha explícita, inclusive `--mode auto`. Preserve o ID e atualize o modo com `python -m harness sdd mode ID MODO` se o usuário mudar a escolha e quiser manter a tarefa gerenciada.
    - Antes de usar `auto` com `sdd new` ou `sdd mode`, avalie comportamento, novidade funcional, contratos, dados, segurança, custo de serviços, volume de código, complexidade, arquitetura, reversibilidade e alcance dos testes. Em ambos os comandos, use `--assessed-low` somente após avaliar as dimensões omitidas como de baixo impacto. Indique os riscos específicos com `--risk FATOR=material` ou `--risk FATOR=unknown`. A decisão técnica indispensável continua sujeita a esclarecimento qualquer que seja o modo.
-   - Em `lite`, preencha objetivo, aceite, passos e verificação em `tarefa.md`. Em `full`, descreva o comportamento em `spec.md`, a estratégia em `plan.md` e os passos em `tasks.md`. Registre o andamento com `sdd set-status ID ESTADO`. Para `verified`, associe relatórios do runner com `--evidence` ou registros de verificação manual com `--manual-evidence`. Finalize a tarefa após as verificações e a revisão pertinentes.
+   - Em `lite`, preencha objetivo, aceite, passos e verificação em `tarefa.md`. Em `full`, descreva o comportamento em `spec.md`, a estratégia em `plan.md` e os passos em `tasks.md`. Preserve os IDs existentes e use `sdd allocate-id ID REQ|AC|T` para reservar novos IDs. Declare requisitos como `- REQ-001: descrição` e critérios como `- AC-001 (REQ-001): condição observável`. Em `Verificações planejadas`, use `- AC-001: teste ou procedimento`. Em `Passos`, use `- [ ] T-001 (REQ-001, AC-001): ação`. Registre referências em `Verificação` com `- T-001: evidência ou procedimento usado`.
+   - Em `full`, execute `sdd validate ID` e examine `sdd trace ID` antes de implementar. Revise semanticamente ambiguidades, contradições, lacunas, suposições sem evidência e critérios que não possam ser observados. Compare o conteúdo ao pedido do usuário. Corrija problemas que puder resolver com os fatos disponíveis. Quando uma escolha substantiva ainda exigir autorização, use `sdd await-decision ID` e apresente a decisão pendente. A confirmação `sdd approve ID` pertence ao usuário e à revisão exibida no terminal. Retome com a autorização registrada. O escopo que o usuário já autorizou pode seguir a partir de um rascunho validado, sem confirmação redundante.
+   - Registre o andamento com `sdd set-status ID ESTADO`. Para `verified`, associe relatórios do runner com `--evidence` ou registros de verificação manual com `--manual-evidence`. Em `full`, atualize os passos e referências e reexecute `sdd validate ID` antes de concluir. Confronte critérios com os resultados e a revisão independente. A validação estrutural e o estado da especificação não comprovam atendimento dos critérios.
 
 4. Examine `.harness/harness.json` e `python -m harness.runner --list`, quando configurados. Execute apenas checks pertinentes, selecionados explicitamente com `python -m harness.runner --check NOME` (repita `--check` para vários). Registre comandos, códigos de saída e os JSON/logs de `.harness/results/`. `unconfigured` e `not_run` nunca equivalem a `passed`. Não configure nem execute preparação que instale dependências sem autorização.
 

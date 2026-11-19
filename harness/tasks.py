@@ -6,12 +6,15 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import re
+import sys
 import tempfile
 import unicodedata
 import uuid
 
 from harness.config import ConfigError, read_json
 from harness.project_storage import PROJECT_LOCK, ProjectGit, atomic_write, local_path, project_lock
+from harness.specs import KINDS, SECTIONS, used_numbers
+from harness.traceability import specification, trace
 
 TASKS = ".harness/tarefas"
 BACKUPS = ".harness/backups/tasks"
@@ -30,12 +33,9 @@ STATES = {
 LITE_HEADINGS = ("Objetivo", "Critérios de aceite", "Passos", "Verificação")
 DOCUMENTS = {
     "lite": {"tarefa.md": LITE_HEADINGS},
-    "full": {
-        "spec.md": ("Objetivo", "Escopo", "Comportamento esperado", "Critérios de aceite"),
-        "plan.md": ("Estratégia e decisões", "Riscos e alternativas", "Verificações planejadas"),
-        "tasks.md": ("Passos", "Verificação"),
-    },
+    "full": SECTIONS,
 }
+SPEC_STATES = ("draft", "awaiting_decision", "approved")
 
 
 def _now():
@@ -163,10 +163,47 @@ class TaskStore:
             raise ConfigError(f"Invalid task metadata: {path}")
         if "full_snapshot" in meta and (_layout(meta) != "lite" or not _full_snapshot_valid(meta["full_snapshot"])):
             raise ConfigError(f"Invalid previous full layout in task metadata: {path}")
+        spec = meta.get("specification", {"state": "draft"})
+        if (not isinstance(spec, dict) or spec.get("state") not in SPEC_STATES or
+                (spec["state"] == "approved" and
+                 (not isinstance(spec.get("sha256"), str) or not HASH.fullmatch(spec["sha256"])))):
+            raise ConfigError(f"Invalid specification state in task metadata: {path}")
+        counters = meta.get("document_ids", {})
+        if (not isinstance(counters, dict) or counters.keys() - set(KINDS)
+                or any(type(value) is not int or not 0 <= value < 10**9 for value in counters.values())):
+            raise ConfigError(f"Invalid document identifier counters in task metadata: {path}")
+        if "full_completion" in meta:
+            hashes = meta["full_completion"]
+            if (not isinstance(hashes, dict) or hashes.keys() != SECTIONS.keys()
+                    or any(not isinstance(value, str) or not HASH.fullmatch(value) for value in hashes.values())):
+                raise ConfigError(f"Invalid completion revision in task metadata: {path}")
         return meta
 
     def _result(self, folder, meta):
-        return {**meta, "path": f"{TASKS}/{folder}"}
+        result = {**meta, "path": f"{TASKS}/{folder}"}
+        if _layout(meta) == "full":
+            result["spec_status"] = self._spec_status(folder, meta)
+            if meta["status"] == "completed" and not self._completion_current(folder, meta):
+                result.update(status="verified", completion_stale=True)
+        return result
+
+    def _completion_current(self, folder, meta):
+        if "full_completion" not in meta or self._spec_status(folder, meta) == "awaiting_decision":
+            return False
+        try:
+            return meta["full_completion"] == self._contract_hashes(folder)
+        except (ConfigError, OSError):
+            return False
+
+    def _spec_status(self, folder, meta):
+        spec = meta.get("specification", {"state": "draft"})
+        if spec["state"] != "approved":
+            return spec["state"]
+        try:
+            digest = _digest(self._task_path(folder, "spec.md").read_bytes())
+        except (ConfigError, OSError):
+            return "awaiting_decision"
+        return "approved" if digest == spec["sha256"] else "awaiting_decision"
 
     def _records(self):
         for _, folder in self._folders():
@@ -231,6 +268,8 @@ class TaskStore:
             now = _now()
             meta = {"id": uuid.uuid4().hex, "number": number, "title": title, "mode": mode, "mode_reason": reason,
                     "status": "open", "verification": "unverified", "created_at": now, "updated_at": now, "evidence": []}
+            if mode == "full":
+                meta["specification"] = {"state": "draft"}
             directory = self.path(TASKS)
             directory.mkdir(parents=True, exist_ok=True)
             with tempfile.TemporaryDirectory(dir=directory, prefix=".new-") as temporary:
@@ -267,6 +306,100 @@ class TaskStore:
         atomic_write(self._task_path(folder, "meta.json"), _json(meta))
         return self._result(folder, meta)
 
+    def _require_full(self, meta):
+        if meta["mode"] != "full":
+            raise ConfigError("Specification contracts require full mode")
+
+    def _contract(self, folder, meta):
+        self._require_full(meta)
+        paths = {name: self._task_path(folder, name) for name in SECTIONS}
+        report = trace(self.root, paths)
+        return {**report, "task_id": meta["id"], "path": f"{TASKS}/{folder}",
+                "spec_status": self._spec_status(folder, meta)}
+
+    def _contract_hashes(self, folder):
+        paths = (self._task_path(folder, name) for name in SECTIONS)
+        return {path.name: _digest(path.read_bytes()) if path.is_file() else None for path in paths}
+
+    def contract(self, identifier):
+        folder, meta = self._find(identifier)
+        if self._task_path(folder, TRANSITION).exists():
+            raise ConfigError("A mode transition is pending; use sdd resume before validating the contract")
+        return self._contract(folder, meta)
+
+    def allocate_id(self, identifier, kind):
+        with self._writer() as git:
+            folder, meta = self._for_write(identifier, git)
+            self._require_full(meta)
+            if kind not in KINDS:
+                raise ConfigError(f"Invalid document identifier kind: {kind}")
+            counters = meta.setdefault("document_ids", {})
+            numbers = used_numbers((self._task_path(folder, name) for name in SECTIONS), kind)
+            number = max(counters.get(kind, 0), max(numbers, default=0)) + 1
+            if number >= 10**9:
+                raise ConfigError(f"{kind} identifier counter is exhausted")
+            counters[kind] = number
+            self._set_meta(folder, meta, git)
+            return {"task_id": meta["id"], "id": f"{kind}-{number:03d}"}
+
+    def await_decision(self, identifier):
+        with self._writer() as git:
+            folder, meta = self._for_write(identifier, git)
+            self._require_full(meta)
+            if meta.get("specification") == {"state": "awaiting_decision"}:
+                return self._result(folder, meta)
+            meta["specification"] = {"state": "awaiting_decision"}
+            return self._set_meta(folder, meta, git)
+
+    def _approval_snapshot(self, folder, meta):
+        self._require_full(meta)
+        path = self._task_path(folder, "spec.md")
+        digest = _digest(path.read_bytes())
+        *_, diagnostics = specification(self.root, path)
+        if diagnostics:
+            first = diagnostics[0]
+            raise ConfigError(f"{first.file}:{first.line}: {first.message}")
+        if digest != _digest(path.read_bytes()):
+            raise ConfigError("Specification changed while preparing approval; retry")
+        return path, digest
+
+    def approve(self, identifier):
+        if not sys.stdin.isatty() or not sys.stderr.isatty():
+            raise ConfigError("Specification approval requires interactive confirmation from the user")
+        folder, meta = self._find(identifier)
+        if self._task_path(folder, TRANSITION).exists():
+            raise ConfigError("A mode transition is pending; use sdd resume before approving")
+        path, digest = self._approval_snapshot(folder, meta)
+        print(f"Especificação {path}\nDigite o SHA-256 para confirmar a revisão {digest}", file=sys.stderr, flush=True)
+        if sys.stdin.readline().strip() != digest:
+            raise ConfigError("Specification confirmation did not match the displayed revision")
+        with self._writer() as git:
+            folder, current = self._for_write(identifier, git)
+            _, latest = self._approval_snapshot(folder, current)
+            if latest != digest or current["id"] != meta["id"]:
+                raise ConfigError("Specification changed during confirmation; review the new revision")
+            current["specification"] = {"state": "approved", "sha256": digest, "approved_at": _now()}
+            return self._set_meta(folder, current, git)
+
+    def _check_spec_progress(self, folder, meta, status):
+        if status in ("in_progress", "verified", "completed") and (
+                meta.get("specification", {}).get("state") == "awaiting_decision"
+                or (meta["mode"] == "full" and self._spec_status(folder, meta) == "awaiting_decision")):
+            raise ConfigError("Specification requires user approval before progressing")
+
+    def _check_completion(self, folder, meta):
+        before = self._contract_hashes(folder)
+        report = self._contract(folder, meta)
+        if not report["valid"]:
+            first = report["diagnostics"][0]
+            raise ConfigError(f"{first['file']}:{first['line']}: {first['message']}; run sdd validate")
+        if report["pending_tasks"]:
+            raise ConfigError(f"Unfinished execution steps: {', '.join(report['pending_tasks'])}")
+        if None in before.values() or before != self._contract_hashes(folder):
+            raise ConfigError("Contract changed during completion; validate the new revision")
+        self._check_spec_progress(folder, meta, "completed")
+        return before
+
     def set_status(self, identifier, status, evidence=(), manual_evidence=()):
         with self._writer() as git:
             folder, meta = self._for_write(identifier, git)
@@ -275,6 +408,7 @@ class TaskStore:
             old_status = meta["status"]
             if status == "completed" and old_status not in ("verified", "completed"):
                 raise ConfigError("Record a verified status before completing the task")
+            self._check_spec_progress(folder, meta, status)
             supplied = evidence or manual_evidence
             references = list(dict.fromkeys(evidence)) if supplied else meta["evidence"]
             manual = list(dict.fromkeys(manual_evidence)) if supplied else meta.get("manual_evidence", [])
@@ -287,6 +421,10 @@ class TaskStore:
                 self._check_evidence(references, passing=passing)
             if manual and (supplied or passing):
                 self._check_manual_evidence(manual)
+            if status == "completed" and meta["mode"] == "full":
+                meta["full_completion"] = self._check_completion(folder, meta)
+            else:
+                meta.pop("full_completion", None)
             meta.update(status=status, verification=STATES[status], evidence=references)
             if manual:
                 meta["manual_evidence"] = manual
@@ -333,11 +471,19 @@ class TaskStore:
             layout = _layout(meta)
             if meta["mode"] == mode and meta["mode_reason"] == reason:
                 return self._result(folder, meta)
+            if layout == "full" and mode == "lite" and self._spec_status(folder, meta) == "awaiting_decision":
+                raise ConfigError("Specification requires user approval before changing to lite")
             updated = {**meta, "mode": mode, "mode_reason": reason}
             if mode == "off":
                 updated["document_mode"] = layout
             else:
                 updated.pop("document_mode", None)
+                if mode == "full":
+                    updated.setdefault("specification", {"state": "draft"})
+            if layout != mode and mode != "off" and "full" in (layout, mode):
+                if meta["status"] == "completed" and (mode == "full" or not self._completion_current(folder, meta)):
+                    updated["status"] = "verified"
+                updated.pop("full_completion", None)
             if mode in ("off", layout):
                 return self._set_meta(folder, updated, git)
             return self._change_layout(folder, meta, updated, git)

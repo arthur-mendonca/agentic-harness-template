@@ -83,6 +83,11 @@ with contextlib.redirect_stdout(io.StringIO()):
     assert main(["--validate", "--project", str(project)]) == 0
     assert main(["update", "--project", str(project)]) == 0
     assert main(["sdd", "--project", str(project), "new", "--mode", "lite", "--title", "Wheel SDD"]) == 0
+    assert main(["sdd", "--project", str(project), "new", "--mode", "full", "--title", "Wheel contract"]) == 0
+with contextlib.redirect_stdout(io.StringIO()) as contract_output:
+    assert main(["sdd", "--project", str(project), "validate", "002"]) == 1
+contract = json.loads(contract_output.getvalue())
+assert contract["spec_status"] == "draft" and contract["diagnostics"]
 assert "<!-- harness:managed:start -->" in (project / "AGENTS.md").read_text(encoding="utf-8")
 assert {p.name for p in (project / ".harness/tarefas/001-wheel-sdd").iterdir()} == {"meta.json", "tarefa.md"}
 assert (project / ".harness/pendencias.md").is_file()

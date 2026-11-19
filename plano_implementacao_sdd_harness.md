@@ -196,6 +196,8 @@ $sdd-off Corrija este texto sem criar documentos.
 
 ### ETAPA 5 — Implementar contratos de especificação, rastreabilidade e aprovação
 
+**Status** · Implementada e verificada com 137 testes no Windows, incluindo instalação por wheel.
+
 **Objetivo:** permitir verificar o elo entre requisitos, planejamento, tarefas e testes.
 
 **Arquivos prováveis:** `harness/specs.py`, `harness/traceability.py`, `harness/status.py`, testes `test_specs.py`, `test_traceability.py`.
@@ -209,12 +211,12 @@ $sdd-off Corrija este texto sem criar documentos.
 
 **Tarefas:**
 
-- [ ] Atribuir IDs estáveis de escopo local à tarefa; garantir unicidade de `REQ`, `AC` e `T` e referências válidas.
-- [ ] Validar estrutura, seções mínimas, campos obrigatórios, links quebrados, critérios órfãos, tarefas sem requisito e requisitos sem teste/verificação planejada.
-- [ ] Adicionar análise **semântica** conduzida pelo agente: ambiguidades, contradições, lacunas, premissas não aprovadas e critérios não observáveis.
-- [ ] Distinguir estado da especificação (`rascunho`, `aguardando decisão`, `aprovada`) de estado da execução (`em andamento`, `bloqueada`, `verificada`, `concluída`).
-- [ ] Exigir autorização humana somente para escolhas substantivas ainda indefinidas ou mudanças relevantes não autorizadas; impedir que o agente se conceda aprovação de requisitos.
-- [ ] Evitar criar uma tabela Markdown gigante de rastreabilidade: manter associações breves junto das tarefas e/ou JSON derivável localmente.
+- [x] Atribuir IDs estáveis de escopo local à tarefa; garantir unicidade de `REQ`, `AC` e `T` e referências válidas.
+- [x] Validar estrutura, seções mínimas, campos obrigatórios, links quebrados, critérios órfãos, tarefas sem requisito e requisitos sem teste/verificação planejada.
+- [x] Adicionar análise **semântica** conduzida pelo agente: ambiguidades, contradições, lacunas, premissas não aprovadas e critérios não observáveis.
+- [x] Distinguir estado da especificação (`rascunho`, `aguardando decisão`, `aprovada`) de estado da execução (`em andamento`, `bloqueada`, `verificada`, `concluída`).
+- [x] Exigir autorização humana somente para escolhas substantivas ainda indefinidas ou mudanças relevantes não autorizadas; impedir que o agente se conceda aprovação de requisitos.
+- [x] Evitar criar uma tabela Markdown gigante de rastreabilidade: manter associações breves junto das tarefas e/ou JSON derivável localmente.
 
 **Critérios de aceitação:** nenhuma tarefa declarada completa sem ligação aos critérios pertinentes; inconsistências geram diagnósticos localizados; validação sintática é determinística e análise semântica é explicitamente uma revisão por agente, não uma garantia do Python.
 

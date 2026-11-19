@@ -146,6 +146,8 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(self.invoke("status", task["id"])["verification"], "unverified")
 
     def test_manual_verification_is_recorded_without_requiring_automated_checks(self):
+        from tests.test_specs import PLAN, SPEC, TASKS
+
         task = self.new("Revisar saída visual", "--mode", "lite")
         proof = self.root / task["path"] / "tarefa.md"
         with proof.open("a", encoding="utf-8") as stream:
@@ -156,6 +158,8 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(checked["evidence"], [])
         promoted = self.invoke("mode", task["id"], "full")
         self.assertEqual(promoted["manual_evidence"], [f"{promoted['backup']}/tarefa.md"])
+        for name, content in (("spec.md", SPEC), ("plan.md", PLAN), ("tasks.md", TASKS)):
+            (self.root / promoted["path"] / name).write_bytes(content.encode("utf-8"))
         self.assertEqual(self.invoke("set-status", task["id"], "completed")["status"], "completed")
 
     def test_a_passing_check_can_coexist_with_non_applicable_checks(self):
