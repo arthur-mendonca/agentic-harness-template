@@ -128,9 +128,44 @@ python -m harness sdd await-decision 001
 python -m harness sdd approve 001
 ```
 
-`validate` localiza inconsistências por arquivo e linha. `trace` mostra as ligações entre requisitos, critérios, verificações planejadas e passos em JSON. Ambos retornam código 1 em caso de inconsistência. Para concluir uma tarefa full, o contrato deve estar válido e os passos concluídos, com as verificações registradas. Se o trio mudar após a conclusão, o CLI mostra a verificação anterior como `verified` até que o novo contrato seja validado e concluído. A revisão semântica do agente avalia se o texto é claro, autorizado e verificável.
+`validate` localiza inconsistências por arquivo e linha. `trace` mostra as ligações entre requisitos, critérios, verificações planejadas e passos em JSON. Ambos retornam código 1 em caso de inconsistência. A revisão semântica do agente avalia se o texto é claro, autorizado e verificável.
 
 O estado da especificação é separado do andamento da tarefa. Use `await-decision` quando houver uma decisão substantiva pendente. O usuário pode confirmar a revisão exibida por `approve` em um terminal interativo. O registro local fica vinculado ao SHA-256 de `spec.md` e depende do controle de acesso ao terminal e aos arquivos do projeto. Uma revisão diferente exige nova confirmação quando a tarefa já tinha aprovação. Um rascunho validado pode seguir dentro do escopo já autorizado.
+
+### Evidências por critério e conclusão em modo full
+
+```console
+python -m harness.runner --check test
+python -m harness sdd verify 001
+python -m harness sdd verify 001 --assessment CAMINHO_DO_JSON
+python -m harness sdd set-status 001 completed
+```
+
+Depois de comparar o diff e os resultados com o contrato, o agente registra a avaliação em um JSON temporário. Copie em `contract` os três hashes exibidos por `sdd verify` e substitua o caminho ilustrativo pelo JSON emitido pelo runner.
+
+```json
+{
+  "contract": {
+    "spec.md": "<SHA-256 exibido pelo CLI>",
+    "plan.md": "<SHA-256 exibido pelo CLI>",
+    "tasks.md": "<SHA-256 exibido pelo CLI>"
+  },
+  "criteria": {
+    "AC-001": {
+      "status": "met",
+      "reason": "O teste de renderização confere o texto exibido no formulário.",
+      "evidence": [{"report": ".harness/results/ARQUIVO.json", "check": "test"}]
+    }
+  },
+  "review": {"status": "not_performed", "reason": "Revisor indisponível e revisão facultativa no projeto."}
+}
+```
+
+Em `criteria`, use `met` (atendido), `divergent` (divergente), `unverified` (não verificado) ou `blocked` (bloqueado). Para evidência manual, use `{"file":"CAMINHO_RELATIVO"}` com procedimento e resultado observado. Em `review`, use `passed`, `findings`, `not_performed` ou `blocked`, com justificativa. Quando a política exigir revisão e ela estiver indisponível, registre `blocked` até resolver o impedimento ou obter dispensa explícita.
+
+`verify` retorna código 0 quando a tarefa está apta à conclusão, 1 quando falta verificação ou há impedimentos e 2 para erro de uso ou entrada inválida. Uma avaliação válida pode ser gravada com código 1. Cada vínculo consulta o check indicado no relatório, inclusive quando a mesma execução contém resultados diferentes. Checks não executados, não configurados ou inaplicáveis deixam o critério em aberto. A referência ao relatório indica qual check foi executado. Cabe ao agente e ao revisor confirmar o que ele cobre no código.
+
+Para concluir, todos os critérios precisam de avaliação atual com evidência, os passos devem estar concluídos e a revisão deve estar livre de impedimentos. Alterações nos documentos ou nas evidências vinculadas invalidam a conclusão até nova avaliação. Depois de mudar a implementação, reexecute os checks afetados e atualize a avaliação.
 
 ## Instalação principal: pacote Python compartilhado
 

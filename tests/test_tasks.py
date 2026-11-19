@@ -29,7 +29,7 @@ class TaskTests(unittest.TestCase):
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             code = main(["sdd", "--project", str(self.root), *args])
         self.assertEqual(code, exit_code, stdout.getvalue() + stderr.getvalue())
-        return json.loads(stdout.getvalue()) if code == 0 else stderr.getvalue()
+        return json.loads(stdout.getvalue()) if stdout.getvalue() else stderr.getvalue()
 
     def new(self, title="Ajustar rótulo", *args):
         return self.invoke("new", "--title", title, *args)
@@ -160,6 +160,15 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(promoted["manual_evidence"], [f"{promoted['backup']}/tarefa.md"])
         for name, content in (("spec.md", SPEC), ("plan.md", PLAN), ("tasks.md", TASKS)):
             (self.root / promoted["path"] / name).write_bytes(content.encode("utf-8"))
+        contract = self.invoke("verify", task["id"], exit_code=1)["contract"]
+        assessment = self.root / "assessment.json"
+        assessment.write_text(json.dumps({
+            "contract": contract,
+            "criteria": {"AC-001": {"status": "met", "reason": "Conferi o rótulo nas duas resoluções.",
+                                    "evidence": [{"file": promoted["manual_evidence"][0]}]}},
+            "review": {"status": "not_performed", "reason": "Revisor indisponível"},
+        }), encoding="utf-8")
+        self.invoke("verify", task["id"], "--assessment", str(assessment))
         self.assertEqual(self.invoke("set-status", task["id"], "completed")["status"], "completed")
 
     def test_a_passing_check_can_coexist_with_non_applicable_checks(self):

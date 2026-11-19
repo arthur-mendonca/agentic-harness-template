@@ -222,6 +222,8 @@ $sdd-off Corrija este texto sem criar documentos.
 
 ### ETAPA 6 — Integrar checks, evidências e convergence
 
+**Status** · Implementada e verificada com 146 testes no Windows com Python 3.14, incluindo instalação por wheel. Revisão independente concluída sem findings P0–P2 pendentes.
+
 **Objetivo:** comparar a implementação ao comportamento contratado, identificar lacunas e corrigir divergências sem mascarar falhas.
 
 **Arquivos prováveis:** `harness/convergence.py`, `harness/traceability.py`, `harness/runner.py` e `skills/verified-development/SKILL.md`; testes `test_convergence.py`.

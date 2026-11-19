@@ -2,9 +2,10 @@
 
 import argparse
 import json
+from pathlib import Path
 import sys
 
-from harness.config import discover_root, load_config
+from harness.config import discover_root, load_config, read_json
 from harness.migration import require_tasks_ready
 from harness.sdd_policy import MODES, choose_mode, parse_risks
 from harness.specs import KINDS
@@ -41,19 +42,25 @@ def main(argv=None):
     change.add_argument("--manual-evidence", action="append", default=[], metavar="PATH")
     validate = commands.add_parser("validate", help="Validate the full task Markdown contract")
     tracing = commands.add_parser("trace", help="Show requirements, criteria, planned checks and steps")
+    verify = commands.add_parser("verify", help="Inspect criterion evidence or record an agent assessment")
+    verify.add_argument("--assessment", type=Path, help="JSON assessment to record")
     allocate = commands.add_parser("allocate-id", help="Reserve a document identifier within a full task")
     awaiting = commands.add_parser("await-decision", help="Record that a specification needs a substantive decision")
     approve = commands.add_parser("approve", help="Confirm a specification revision in an interactive terminal")
-    for command in (validate, tracing, allocate, awaiting, approve):
+    for command in (validate, tracing, verify, allocate, awaiting, approve):
         command.add_argument("id")
     allocate.add_argument("kind", choices=KINDS)
-    for command in (new, listing, status, resume, mode, change, validate, tracing, allocate, awaiting, approve):
+    for command in (new, listing, status, resume, mode, change, validate, tracing, verify, allocate, awaiting, approve):
         command.add_argument("--project", default=argparse.SUPPRESS, help="Exact project root")
     args = parser.parse_args(argv)
     try:
         result = _dispatch(args)
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 1 if args.command in ("validate", "trace") and not result["valid"] else 0
+        if args.command in ("validate", "trace"):
+            return 0 if result["valid"] else 1
+        if args.command == "verify":
+            return 0 if result["ready"] else 1
+        return 0
     except (OSError, ValueError) as exc:
         print(f"SDD error: {exc}", file=sys.stderr)
         return 2
@@ -86,6 +93,10 @@ def _dispatch(args):
         if args.command == "validate":
             contract.pop("requirements")
         return contract
+    if args.command == "verify":
+        if args.assessment is None:
+            return store.verification(args.id)
+        return store.record_assessment(args.id, read_json(args.assessment))
     if args.command == "allocate-id":
         return store.allocate_id(args.id, args.kind)
     if args.command == "await-decision":

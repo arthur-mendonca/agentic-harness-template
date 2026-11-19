@@ -121,9 +121,18 @@ class SpecificationTests(unittest.TestCase):
         self.assertIn("T-001", self.invoke("set-status", self.id, "completed", code=2))
         self.assertEqual(self.invoke("status", self.id)["status"], "verified")
         self.write_contract()
+        self.assertIn("sdd verify", self.invoke("set-status", self.id, "completed", code=2))
+        assessment = self.root / "assessment.json"
+        assessment.write_text(json.dumps({
+            "contract": self.invoke("verify", self.id, code=1)["contract"],
+            "criteria": {"AC-001": {"status": "met", "reason": "Conferi o rótulo nas duas resoluções.",
+                                    "evidence": [{"file": evidence}]}},
+            "review": {"status": "not_performed", "reason": "Revisor indisponível"},
+        }), encoding="utf-8")
+        self.invoke("verify", self.id, "--assessment", str(assessment))
         self.assertEqual(self.invoke("set-status", self.id, "completed")["status"], "completed")
         (self.folder / "tasks.md").write_bytes(TASKS.replace("AC-001", "AC-999").encode("utf-8"))
-        self.assertEqual(self.invoke("status", self.id)["status"], "verified")
+        self.assertEqual(self.invoke("status", self.id)["status"], "in_progress")
         self.assertTrue(self.invoke("status", self.id)["completion_stale"])
 
     def test_only_interactive_confirmation_approves_current_specification(self):

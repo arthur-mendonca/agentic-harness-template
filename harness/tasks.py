@@ -12,6 +12,7 @@ import unicodedata
 import uuid
 
 from harness.config import ConfigError, read_json
+from harness.convergence import evaluate, manual_evidence_path, read_check_report
 from harness.project_storage import PROJECT_LOCK, ProjectGit, atomic_write, local_path, project_lock
 from harness.specs import KINDS, SECTIONS, used_numbers
 from harness.traceability import specification, trace
@@ -177,6 +178,8 @@ class TaskStore:
             if (not isinstance(hashes, dict) or hashes.keys() != SECTIONS.keys()
                     or any(not isinstance(value, str) or not HASH.fullmatch(value) for value in hashes.values())):
                 raise ConfigError(f"Invalid completion revision in task metadata: {path}")
+        if "convergence" in meta and not isinstance(meta["convergence"], dict):
+            raise ConfigError(f"Invalid convergence assessment in task metadata: {path}")
         return meta
 
     def _result(self, folder, meta):
@@ -184,16 +187,23 @@ class TaskStore:
         if _layout(meta) == "full":
             result["spec_status"] = self._spec_status(folder, meta)
             if meta["status"] == "completed" and not self._completion_current(folder, meta):
-                result.update(status="verified", completion_stale=True)
+                result.update(status="in_progress", verification="unverified", completion_stale=True)
+            elif (meta["status"] == "verified" and "convergence" in meta
+                  and self._verified_contract(folder, meta) is None):
+                result.update(status="in_progress", verification="unverified")
         return result
 
     def _completion_current(self, folder, meta):
-        if "full_completion" not in meta or self._spec_status(folder, meta) == "awaiting_decision":
-            return False
+        return "full_completion" in meta and meta["full_completion"] == self._verified_contract(folder, meta)
+
+    def _verified_contract(self, folder, meta):
+        if "convergence" not in meta:
+            return None
         try:
-            return meta["full_completion"] == self._contract_hashes(folder)
+            report, _ = self._verification(folder, meta)
+            return report["contract"] if report["ready"] else None
         except (ConfigError, OSError):
-            return False
+            return None
 
     def _spec_status(self, folder, meta):
         spec = meta.get("specification", {"state": "draft"})
@@ -311,7 +321,6 @@ class TaskStore:
             raise ConfigError("Specification contracts require full mode")
 
     def _contract(self, folder, meta):
-        self._require_full(meta)
         paths = {name: self._task_path(folder, name) for name in SECTIONS}
         report = trace(self.root, paths)
         return {**report, "task_id": meta["id"], "path": f"{TASKS}/{folder}",
@@ -323,6 +332,7 @@ class TaskStore:
 
     def contract(self, identifier):
         folder, meta = self._find(identifier)
+        self._require_full(meta)
         if self._task_path(folder, TRANSITION).exists():
             raise ConfigError("A mode transition is pending; use sdd resume before validating the contract")
         return self._contract(folder, meta)
@@ -387,18 +397,55 @@ class TaskStore:
                 or (meta["mode"] == "full" and self._spec_status(folder, meta) == "awaiting_decision")):
             raise ConfigError("Specification requires user approval before progressing")
 
+    def _verification(self, folder, meta, assessment=None, *, recording=False):
+        hashes = self._contract_hashes(folder)
+        trace = self._contract(folder, meta)
+        report, evidence_hashes = evaluate(
+            self.root, trace, hashes, assessment if recording else meta.get("convergence"), recording=recording,
+        )
+        if hashes != self._contract_hashes(folder):
+            raise ConfigError("Contract changed during verification; retry")
+        report.update(task_id=trace["task_id"], path=trace["path"])
+        return report, evidence_hashes
+
+    def verification(self, identifier):
+        folder, meta = self._find(identifier)
+        self._require_full(meta)
+        if self._task_path(folder, TRANSITION).exists():
+            raise ConfigError("A mode transition is pending; use sdd resume before verifying")
+        return self._verification(folder, meta)[0]
+
+    def record_assessment(self, identifier, assessment):
+        with self._writer() as git:
+            folder, meta = self._for_write(identifier, git)
+            self._require_full(meta)
+            report, hashes = self._verification(folder, meta, assessment, recording=True)
+            recorded = {**assessment, "evidence_hashes": hashes}
+            if recorded == meta.get("convergence") and meta["status"] in ("verified", "completed") and report["ready"]:
+                return report
+            meta["convergence"] = recorded
+            meta.pop("full_completion", None)
+            if report["ready"]:
+                meta.update(status="verified", verification="verified")
+            elif meta["status"] in ("verified", "completed"):
+                meta.update(status="in_progress", verification="unverified")
+            self._set_meta(folder, meta, git)
+            return report
+
     def _check_completion(self, folder, meta):
-        before = self._contract_hashes(folder)
-        report = self._contract(folder, meta)
-        if not report["valid"]:
+        report, _ = self._verification(folder, meta)
+        if report["diagnostics"]:
             first = report["diagnostics"][0]
             raise ConfigError(f"{first['file']}:{first['line']}: {first['message']}; run sdd validate")
         if report["pending_tasks"]:
             raise ConfigError(f"Unfinished execution steps: {', '.join(report['pending_tasks'])}")
-        if None in before.values() or before != self._contract_hashes(folder):
-            raise ConfigError("Contract changed during completion; validate the new revision")
-        self._check_spec_progress(folder, meta, "completed")
-        return before
+        if not report["assessment_current"]:
+            raise ConfigError("Record a current criterion assessment with sdd verify")
+        if report["unmet"]:
+            raise ConfigError(f"Acceptance criteria still open: {', '.join(report['unmet'])}; see sdd verify")
+        if not report["ready"]:
+            raise ConfigError("Resolve independent review findings or blockers before completion; see sdd verify")
+        return report["contract"]
 
     def set_status(self, identifier, status, evidence=(), manual_evidence=()):
         with self._writer() as git:
@@ -406,14 +453,22 @@ class TaskStore:
             if meta["mode"] == "off":
                 raise ConfigError("Enable a managed mode before updating the task status")
             old_status = meta["status"]
+            self._check_spec_progress(folder, meta, status)
+            full_completion = None
+            use_assessment = meta["mode"] == "full" and (
+                status == "completed" or (status == "verified" and "convergence" in meta)
+            )
+            if use_assessment:
+                contract = self._check_completion(folder, meta)
+                if status == "completed":
+                    full_completion = contract
             if status == "completed" and old_status not in ("verified", "completed"):
                 raise ConfigError("Record a verified status before completing the task")
-            self._check_spec_progress(folder, meta, status)
             supplied = evidence or manual_evidence
             references = list(dict.fromkeys(evidence)) if supplied else meta["evidence"]
             manual = list(dict.fromkeys(manual_evidence)) if supplied else meta.get("manual_evidence", [])
-            passing = status in ("verified", "completed")
-            if status == "verified" and old_status not in ("verified", "completed") and not supplied:
+            passing = status in ("verified", "completed") and (bool(supplied) or not use_assessment)
+            if passing and status == "verified" and old_status not in ("verified", "completed") and not supplied:
                 raise ConfigError("Use --evidence or --manual-evidence to record a verification")
             if passing and not (references or manual):
                 raise ConfigError("A verified task requires evidence")
@@ -421,10 +476,13 @@ class TaskStore:
                 self._check_evidence(references, passing=passing)
             if manual and (supplied or passing):
                 self._check_manual_evidence(manual)
-            if status == "completed" and meta["mode"] == "full":
-                meta["full_completion"] = self._check_completion(folder, meta)
+            if full_completion is not None:
+                meta["full_completion"] = full_completion
             else:
                 meta.pop("full_completion", None)
+            if (old_status in ("verified", "completed") and status not in ("verified", "completed")
+                    and "convergence" in meta):
+                meta["convergence"]["superseded"] = True
             meta.update(status=status, verification=STATES[status], evidence=references)
             if manual:
                 meta["manual_evidence"] = manual
@@ -434,11 +492,7 @@ class TaskStore:
 
     def _check_evidence(self, paths, *, passing):
         for name in paths:
-            if not re.fullmatch(r"[.]harness/results/[^/\\:]+[.]json", name):
-                raise ConfigError(f"Expected a local check report in .harness/results: {name}")
-            report = read_json(self.path(name))
-            if not isinstance(report, dict) or report.get("report_version") != 1 or report.get("root") != str(self.root):
-                raise ConfigError(f"Invalid check report for this project: {name}")
+            report, _ = read_check_report(self.root, name)
             selected, checks = report.get("selected"), report.get("checks")
             if passing and not self._report_passed(report, selected, checks):
                 raise ConfigError(f"Selected checks must have passed in {name}")
@@ -459,11 +513,7 @@ class TaskStore:
 
     def _check_manual_evidence(self, paths):
         for name in paths:
-            path = self.path(name)
-            if path.is_relative_to(self.root / ".harness/results") and path.suffix.casefold() == ".json":
-                raise ConfigError("Use --evidence for JSON check reports")
-            if not path.is_file() or not path.stat().st_size:
-                raise ConfigError(f"Manual verification file must exist and have content: {name}")
+            manual_evidence_path(self.root, name)
 
     def change_mode(self, identifier, mode, reason):
         with self._writer() as git:
@@ -481,9 +531,12 @@ class TaskStore:
                 if mode == "full":
                     updated.setdefault("specification", {"state": "draft"})
             if layout != mode and mode != "off" and "full" in (layout, mode):
-                if meta["status"] == "completed" and (mode == "full" or not self._completion_current(folder, meta)):
+                if mode == "lite" and meta["status"] in ("verified", "completed") and "convergence" in meta:
+                    updated.update(status="in_progress", verification="unverified")
+                elif meta["status"] == "completed" and (mode == "full" or not self._completion_current(folder, meta)):
                     updated["status"] = "verified"
                 updated.pop("full_completion", None)
+                updated.pop("convergence", None)
             if mode in ("off", layout):
                 return self._set_meta(folder, updated, git)
             return self._change_layout(folder, meta, updated, git)

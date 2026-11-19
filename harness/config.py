@@ -51,9 +51,13 @@ def _unique_object(pairs):
 
 def read_json(path):
     try:
-        return json.loads(Path(path).read_text(encoding="utf-8-sig"), object_pairs_hook=_unique_object)
+        return decode_json(Path(path).read_bytes())
     except (OSError, ValueError) as exc:
         raise ConfigError(f"Cannot read {path}: {exc}") from exc
+
+
+def decode_json(data):
+    return json.loads(data.decode("utf-8-sig"), object_pairs_hook=_unique_object)
 
 
 def _text(value):
