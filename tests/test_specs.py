@@ -117,10 +117,11 @@ class SpecificationTests(unittest.TestCase):
     def test_closure_requires_linked_and_finished_work(self):
         self.write_contract(tasks=TASKS.replace("[x]", "[ ]"))
         evidence = (self.folder / "tasks.md").relative_to(self.root).as_posix()
-        self.invoke("set-status", self.id, "verified", "--manual-evidence", evidence)
+        self.invoke("set-status", self.id, "verified", "--manual-evidence", evidence, code=2)
         self.assertIn("T-001", self.invoke("set-status", self.id, "completed", code=2))
-        self.assertEqual(self.invoke("status", self.id)["status"], "verified")
+        self.assertEqual(self.invoke("status", self.id)["status"], "open")
         self.write_contract()
+        self.invoke("review-policy", self.id, "optional", "--reason", "Explicit fixture waiver", "--decided-by", "test project")
         self.assertIn("sdd verify", self.invoke("set-status", self.id, "completed", code=2))
         assessment = self.root / "assessment.json"
         assessment.write_text(json.dumps({
@@ -172,7 +173,7 @@ class SpecificationTests(unittest.TestCase):
         self.invoke("set-status", lite["id"], "verified", "--manual-evidence", evidence)
         self.invoke("set-status", lite["id"], "completed")
         promoted = self.invoke("mode", lite["id"], "full")
-        self.assertEqual(promoted["status"], "verified")
+        self.assertEqual(promoted["status"], "in_progress")
         self.assertIn("sdd validate", self.invoke("set-status", lite["id"], "completed", code=2))
         backup = self.root / promoted["backup"] / "meta.json"
         self.assertEqual(json.loads(backup.read_bytes())["status"], "completed")

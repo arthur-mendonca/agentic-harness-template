@@ -165,7 +165,19 @@ Depois de comparar o diff e os resultados com o contrato, o agente registra a av
 }
 ```
 
-Em `criteria`, use `met` (atendido), `divergent` (divergente), `unverified` (não verificado) ou `blocked` (bloqueado). Para evidência manual, use `{"file":"CAMINHO_RELATIVO"}` com procedimento e resultado observado. Em `review`, use `passed`, `findings`, `not_performed` ou `blocked`, com justificativa. Quando a política exigir revisão e ela estiver indisponível, registre `blocked` até resolver o impedimento ou obter dispensa explícita.
+Em `criteria`, use `met` (atendido), `divergent` (divergente), `unverified` (não verificado) ou `blocked` (bloqueado). Para evidência manual, use `{"file":"CAMINHO_RELATIVO"}` com procedimento e resultado observado. Em `review`, use `passed`, `findings`, `not_performed` ou `blocked`, com justificativa. Em `full`, a política padrão é `required`: ausência ou impedimento da revisão bloqueia `verified` e `completed`, inclusive com checks verdes e `--evidence`. A indisponibilidade do revisor não concede dispensa.
+
+A política é por tarefa e fica no `meta.json` existente. Somente uma decisão explícita com identificação e motivo permite ausência justificada; por exemplo, antes de registrar a avaliação do exemplo acima:
+
+```sh
+python -m harness sdd review-policy 001 optional --reason "Dispensa autorizada para esta tarefa" --decided-by "Responsável do projeto"
+```
+
+`review-policy 001 required --reason "Revisão obrigatória" --decided-by "Responsável"` restaura a exigência. `status`, `list`, `resume` e `verify` mostram `review_policy`, `review` e `review_waived`; uma dispensa continua `not_performed`, nunca `passed`. Findings e `blocked` impedem prontidão mesmo em `optional`. Alterar a política para `required` revoga estados que dependiam de dispensa. O schema da configuração permanece v2: v1/v2, novas configurações e a migração preservam os checks e não ganham campos implícitos. Não é necessária migração de schema para esta política por tarefa. `lite` e `off` mantêm seu fluxo proporcional e declaram ausência de revisão formal, sem documentos adicionais.
+
+Para `review.status: passed`, forneça também `draft` com o texto exato da minuta e `provenance` com duas entradas, `code` e `explanation`. Cada entrada exige `reviewer` (agente/processo/revisor identificado), `scope` (escopo examinado), `revision` (identificação do diff/código examinado), `contract` (o objeto de hashes mostrado por `verify`) e `artifact` (arquivo local existente com o resultado da revisão). A entrada `explanation` exige ainda `draft_sha256`, SHA-256 dos bytes UTF-8 exatos de `draft`, fornecido para a minuta revisada. O mesmo revisor independente pode cobrir ambos os escopos, mas a aprovação de código sozinha não aprova a explicação. Não há `explanation.md` ou `review-report.md` obrigatório; use artefatos existentes e o JSON da avaliação.
+
+O executor valida campos, contrato, fingerprint da minuta e hashes dos artefatos, reavaliados nas consultas e antes da conclusão. Minuta ou artefato alterado exige nova revisão pertinente. A identidade, independência real do revisor e a correspondência entre `revision` declarado e código-fonte não são comprovadas automaticamente; dependem de avaliação externa. O vínculo automático ao estado do código é tratado separadamente. Registros antigos sem proveniência permanecem preservados, mas não satisfazem revisão `passed` atual.
 
 `verify` retorna código 0 quando a tarefa está apta à conclusão, 1 quando falta verificação ou há impedimentos e 2 para erro de uso ou entrada inválida. Uma avaliação válida pode ser gravada com código 1. Cada vínculo consulta o check indicado no relatório, inclusive quando a mesma execução contém resultados diferentes. Checks não executados, não configurados ou inaplicáveis deixam o critério em aberto. A referência ao relatório indica qual check foi executado. Cabe ao agente e ao revisor confirmar o que ele cobre no código.
 
@@ -177,7 +189,7 @@ Depois dos checks e da convergence, `verified-development` prepara a explicaçã
 
 O revisor independente recebe requisitos, diff atual incluindo arquivos novos, testes/evidências e minuta. Confere afirmações e omissões contra o código: por exemplo, três chamadas à Distance Matrix precisam aparecer com condições, razão, efeito em volume/custo potencial e medições ausentes. Uma contagem de chamadas não comprova faturamento. Findings podem exigir corrigir código ou texto; só alterações de código exigem reexecutar checks, seguidos de nova convergence e revisão. A revisão da minuta compartilha o limite de ciclos já utilizado na tarefa.
 
-Sem revisor, a revisão da explicação fica `não realizada`, conforme a política de bloqueio ou dispensa do projeto. A revisão do próprio implementador não é independente. Em `full`, `review.status` e `review.reason` refletem também essa etapa antes de concluir. O Python não julga a qualidade ou fidelidade da explicação.
+Sem revisor, a revisão da explicação fica `não realizada`, conforme a política de bloqueio ou dispensa da tarefa. A revisão do próprio implementador não é independente. Em `full`, a avaliação inclui a proveniência separada de código e explicação e o fingerprint da minuta revisada antes de concluir. O Python não julga a qualidade ou fidelidade da explicação.
 
 Os cenários reproduzíveis de qualidade ficam em `tests/fixtures/explanation/`, com comportamento observado por `python -B -m unittest tests.test_explanation -v`. Esses testes conferem contagem, condições e falhas com cliente falso; a avaliação independente das minutas verifica seu significado e não é substituída por busca de palavras em Markdown.
 

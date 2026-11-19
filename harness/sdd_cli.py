@@ -47,6 +47,11 @@ def main(argv=None):
     change.add_argument("status", choices=STATES)
     change.add_argument("--evidence", action="append", default=[], metavar="PATH")
     change.add_argument("--manual-evidence", action="append", default=[], metavar="PATH")
+    policy = commands.add_parser("review-policy", help="Record an explicit per-task independent review decision")
+    policy.add_argument("id")
+    policy.add_argument("mode", choices=("required", "optional"))
+    policy.add_argument("--reason", required=True)
+    policy.add_argument("--decided-by", required=True)
     validate = commands.add_parser("validate", help="Validate the full task Markdown contract")
     tracing = commands.add_parser("trace", help="Show requirements, criteria, planned checks and steps")
     verify = commands.add_parser("verify", help="Inspect criterion evidence or record an agent assessment")
@@ -57,7 +62,7 @@ def main(argv=None):
     for command in (validate, tracing, verify, allocate, awaiting, approve):
         command.add_argument("id")
     allocate.add_argument("kind", choices=KINDS)
-    for command in (new, finding, listing, status, resume, mode, change, validate, tracing, verify, allocate, awaiting, approve):
+    for command in (new, finding, listing, status, resume, mode, change, policy, validate, tracing, verify, allocate, awaiting, approve):
         command.add_argument("--project", default=argparse.SUPPRESS, help="Exact project root")
     args = parser.parse_args(argv)
     try:
@@ -104,6 +109,8 @@ def _dispatch(args):
         return store.status(args.id)
     if args.command == "resume":
         return store.resume(args.id)
+    if args.command == "review-policy":
+        return store.set_review_policy(args.id, args.mode, args.reason, args.decided_by)
     if args.command in ("validate", "trace"):
         contract = store.contract(args.id)
         if args.command == "validate":

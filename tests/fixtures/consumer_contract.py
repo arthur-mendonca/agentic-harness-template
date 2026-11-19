@@ -56,6 +56,8 @@ def exercise_modes(root):
         assert invoke(root, ['sdd', 'resume', str(task['number'])])['id'] == task['id']
     assert len(invoke(root, ['sdd', 'list'])['tasks']) == 4
     full = invoke(root, ['sdd', 'status', '002'])
+    invoke(root, ['sdd', 'review-policy', '002', 'optional', '--reason', 'Explicit isolated smoke-test waiver',
+                  '--decided-by', 'test project'])
     folder = root / full['path']
     content = {
         'Requisitos': '- REQ-001: Preservar o texto atualizado.',

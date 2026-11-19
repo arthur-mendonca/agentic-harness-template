@@ -12,7 +12,7 @@ import unicodedata
 import uuid
 
 from harness.config import ConfigError, read_json
-from harness.convergence import evaluate, manual_evidence_path, read_check_report
+from harness.convergence import DEFAULT_REVIEW_POLICY, evaluate, manual_evidence_path, read_check_report, validate_review_policy
 from harness.project_storage import PROJECT_LOCK, ProjectGit, atomic_write, local_path, project_lock
 from harness.specs import KINDS, SECTIONS, used_numbers
 from harness.traceability import specification, trace
@@ -180,15 +180,28 @@ class TaskStore:
                 raise ConfigError(f"Invalid completion revision in task metadata: {path}")
         if "convergence" in meta and not isinstance(meta["convergence"], dict):
             raise ConfigError(f"Invalid convergence assessment in task metadata: {path}")
+        if "review_policy" in meta:
+            validate_review_policy(meta["review_policy"])
         return meta
 
     def _result(self, folder, meta):
         result = {**meta, "path": f"{TASKS}/{folder}"}
         if _layout(meta) == "full":
+            result.update(review_policy=meta.get("review_policy", DEFAULT_REVIEW_POLICY))
+            try:
+                report, _ = self._verification(folder, meta)
+            except (ConfigError, OSError) as exc:
+                result.update(review={"status": "blocked", "reason": str(exc)}, review_waived=False,
+                              independence_verification="Review could not be evaluated")
+            else:
+                result.update({key: report[key] for key in ("review", "review_waived", "independence_verification")})
+        else:
+            result["review"] = {"status": "not_performed", "reason": "Formal independent review is not recorded in lite/off"}
+        if _layout(meta) == "full":
             result["spec_status"] = self._spec_status(folder, meta)
             if meta["status"] == "completed" and not self._completion_current(folder, meta):
                 result.update(status="in_progress", verification="unverified", completion_stale=True)
-            elif (meta["status"] == "verified" and "convergence" in meta
+            elif (meta["status"] == "verified"
                   and self._verified_contract(folder, meta) is None):
                 result.update(status="in_progress", verification="unverified")
         return result
@@ -402,6 +415,7 @@ class TaskStore:
         trace = self._contract(folder, meta)
         report, evidence_hashes = evaluate(
             self.root, trace, hashes, assessment if recording else meta.get("convergence"), recording=recording,
+            review_policy=meta.get("review_policy", DEFAULT_REVIEW_POLICY),
         )
         if hashes != self._contract_hashes(folder):
             raise ConfigError("Contract changed during verification; retry")
@@ -414,6 +428,17 @@ class TaskStore:
         if self._task_path(folder, TRANSITION).exists():
             raise ConfigError("A mode transition is pending; use sdd resume before verifying")
         return self._verification(folder, meta)[0]
+
+    def set_review_policy(self, identifier, mode, reason, decided_by):
+        policy = validate_review_policy({"mode": mode, "reason": reason, "decided_by": decided_by})
+        with self._writer() as git:
+            folder, meta = self._for_write(identifier, git)
+            self._require_full(meta)
+            meta["review_policy"] = policy
+            if meta["status"] in ("verified", "completed") and not self._verification(folder, meta)[0]["ready"]:
+                meta.update(status="in_progress", verification="unverified")
+                meta.pop("full_completion", None)
+            return self._set_meta(folder, meta, git)
 
     def record_assessment(self, identifier, assessment):
         with self._writer() as git:
@@ -455,9 +480,7 @@ class TaskStore:
             old_status = meta["status"]
             self._check_spec_progress(folder, meta, status)
             full_completion = None
-            use_assessment = meta["mode"] == "full" and (
-                status == "completed" or (status == "verified" and "convergence" in meta)
-            )
+            use_assessment = meta["mode"] == "full" and status in ("verified", "completed")
             if use_assessment:
                 contract = self._check_completion(folder, meta)
                 if status == "completed":

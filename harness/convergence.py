@@ -8,6 +8,38 @@ from harness.project_storage import local_path
 
 STATES = ("met", "divergent", "unverified", "blocked")
 REVIEW_STATES = ("passed", "findings", "not_performed", "blocked")
+DEFAULT_REVIEW_POLICY = {"mode": "required", "reason": "Full tasks require independent review", "decided_by": "default"}
+
+
+def validate_review_policy(policy):
+    if (not _fields(policy, "mode", "reason", "decided_by") or policy["mode"] not in ("required", "optional")
+            or not _text(policy["reason"]) or not _text(policy["decided_by"])):
+        raise ConfigError("Review policy requires required/optional mode, reason and decided_by")
+    return policy
+
+
+def _review_provenance(root, review, contract, expected, hashes):
+    if not _text(review.get("draft")):
+        raise ConfigError("Passed review requires the exact explanation draft")
+    provenance = review.get("provenance")
+    if not _fields(provenance, "code", "explanation"):
+        raise ConfigError("Passed review requires separate code and explanation provenance")
+    draft_hash = sha256(review["draft"].encode("utf-8")).hexdigest()
+    evidence = Evidence(root)
+    for scope, entry in provenance.items():
+        fields = {"reviewer", "scope", "contract", "revision", "artifact"}
+        if scope == "explanation":
+            fields.add("draft_sha256")
+        if (not isinstance(entry, dict) or entry.keys() != fields
+                or not all(_text(entry.get(key)) for key in ("reviewer", "scope", "revision", "artifact"))
+                or entry["contract"] != contract):
+            raise ConfigError(f"Invalid {scope} review provenance or contract")
+        if scope == "explanation" and entry["draft_sha256"] != draft_hash:
+            raise ConfigError("Explanation draft changed since independent review")
+        name, digest, _ = evidence.inspect({"file": entry["artifact"]})
+        if expected is not None and expected.get(name) != digest:
+            raise ConfigError(f"Review artifact changed since assessment: {name}")
+        hashes[name] = digest
 
 
 def _text(value):
@@ -126,11 +158,12 @@ def _assess(criterion, evidence, expected, hashes):
     return {"status": status, "reason": reason, "evidence": references}
 
 
-def evaluate(root, trace, contract, assessment=None, *, recording=False):
+def evaluate(root, trace, contract, assessment=None, *, recording=False, review_policy=None):
     """Return the current readiness and, when recording, its evidence hashes."""
     criteria = {entry["id"]: {"status": "unverified", "reason": "No current criterion assessment", "evidence": []}
                 for requirement in trace["requirements"] for entry in requirement["criteria"]}
     review = {"status": "not_performed", "reason": "No current independent review recorded"}
+    policy = validate_review_policy(DEFAULT_REVIEW_POLICY if review_policy is None else review_policy)
     hashes = {}
     valid = trace["valid"]
     awaiting = trace["spec_status"] == "awaiting_decision"
@@ -148,11 +181,20 @@ def evaluate(root, trace, contract, assessment=None, *, recording=False):
             raise ConfigError("Assessment criteria must be keyed by acceptance criterion ID")
         for identifier in entries.keys() - criteria.keys():
             raise ConfigError(f"Unknown acceptance criterion: {identifier}")
-        if not _fields(review, "status", "reason") or review["status"] not in REVIEW_STATES or not _text(review["reason"]):
+        if (not isinstance(review, dict) or not {"status", "reason"} <= review.keys()
+                or review.keys() - {"status", "reason", "provenance", "draft"}
+                or review["status"] not in REVIEW_STATES or not _text(review["reason"])):
             raise ConfigError(f"Review requires a reason and a status from: {', '.join(REVIEW_STATES)}")
         expected = None if recording else assessment.get("evidence_hashes")
         if not recording and not isinstance(expected, dict):
             raise ConfigError("Missing assessment evidence hashes")
+        if review["status"] == "passed":
+            try:
+                _review_provenance(root, review, contract, expected, hashes)
+            except (ConfigError, OSError) as exc:
+                if recording:
+                    raise
+                review = {"status": "blocked", "reason": str(exc)}
         evidence = Evidence(root)
         for identifier, criterion in entries.items():
             if (not _fields(criterion, "status", "reason", "evidence") or criterion["status"] not in STATES
@@ -164,7 +206,8 @@ def evaluate(root, trace, contract, assessment=None, *, recording=False):
     unmet = [identifier for identifier, item in criteria.items() if item["status"] != "met"]
     return {
         "ready": bool(current and criteria and not unmet and not trace["pending_tasks"]
-                      and review["status"] in ("passed", "not_performed")),
+                      and (review["status"] == "passed" or
+                           (policy["mode"] == "optional" and review["status"] == "not_performed"))),
         "assessment_current": current,
         "contract": contract,
         "spec_status": trace["spec_status"],
@@ -173,5 +216,8 @@ def evaluate(root, trace, contract, assessment=None, *, recording=False):
         "criteria": criteria,
         "unmet": unmet,
         "review": review,
+        "review_policy": policy,
+        "review_waived": bool(current and policy["mode"] == "optional" and review["status"] == "not_performed"),
+        "independence_verification": "Reviewer identity and independence are declared; external evaluation is required",
         "semantic_review": trace["semantic_review"],
     }, hashes

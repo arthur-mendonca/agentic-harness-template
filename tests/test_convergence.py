@@ -23,6 +23,8 @@ class ConvergenceTests(unittest.TestCase):
         init_project(self.root)
         task = self.invoke("new", "--mode", "full", "--title", "Conferir critérios")
         self.id, self.folder = task["id"], self.root / task["path"]
+        self.invoke("review-policy", self.id, "optional", "--reason", "Explicit waiver for criterion-only fixture",
+                    "--decided-by", "test project")
         self.documents = {
             "spec.md": SPEC.replace("## Restrições", "- AC-002 (REQ-001): O formulário preserva os dados.\n\n## Restrições"),
             "plan.md": PLAN + "- AC-002: Edite o formulário e compare os dados.\n",
@@ -73,13 +75,92 @@ class ConvergenceTests(unittest.TestCase):
 
     def test_green_suite_leaves_unmapped_criteria_unverified(self):
         report = self.report("label")
-        self.invoke("set-status", self.id, "verified", "--evidence", report)
+        self.invoke("set-status", self.id, "verified", "--evidence", report, code=2)
         self.assertIn("sdd verify", self.invoke("set-status", self.id, "completed", code=2))
         outcome = self.assess({"AC-001": self.criterion("met", {"report": report, "check": "label"})}, code=1)
         self.assertEqual(outcome["criteria"]["AC-001"]["status"], "met")
         self.assertEqual(outcome["criteria"]["AC-002"]["status"], "unverified")
         self.assertEqual(outcome["review"]["status"], "not_performed")
         self.assertIn("AC-002", self.invoke("set-status", self.id, "completed", code=2))
+
+    def test_required_review_blocks_absence_and_direct_verification(self):
+        self.invoke("review-policy", self.id, "required", "--reason", "Require independent review", "--decided-by", "test project")
+        proof = self.criterion("met", {"file": self.manual})
+        result = self.assess({"AC-001": proof, "AC-002": proof}, code=1)
+        self.assertFalse(result["ready"])
+        self.assertEqual(result["review_policy"]["mode"], "required")
+        self.invoke("set-status", self.id, "verified", "--manual-evidence", self.manual, code=2)
+        self.invoke("set-status", self.id, "completed", code=2)
+
+    def passed_review(self):
+        draft = "The implementation changes the label and preserves the form."
+        entry = {"reviewer": "independent-review-process-1", "scope": "current task diff and evidence",
+                 "contract": self.contract, "revision": "working-tree diff reviewed in manual.txt", "artifact": self.manual}
+        return {"status": "passed", "reason": "Code and explanation reviewed independently.", "draft": draft,
+                "provenance": {"code": dict(entry), "explanation": {
+                    **entry, "draft_sha256": sha256(draft.encode()).hexdigest()}}}
+
+    def test_passed_review_requires_both_scopes_and_current_draft_and_artifacts(self):
+        self.invoke("review-policy", self.id, "required", "--reason", "Require review", "--decided-by", "test project")
+        proof = self.criterion("met", {"file": self.manual})
+        criteria = {"AC-001": proof, "AC-002": proof}
+        review = self.passed_review()
+        missing = self.passed_review()
+        del missing["provenance"]["explanation"]
+        self.assertIn("separate", self.assess(criteria, review=missing, code=2))
+        changed = self.passed_review()
+        changed["draft"] += " Modified assertion."
+        self.assertIn("draft changed", self.assess(criteria, review=changed, code=2))
+        self.assertTrue(self.assess(criteria, review=review)["ready"])
+        self.invoke("set-status", self.id, "completed")
+        meta_path = self.folder / "meta.json"
+        meta = json.loads(meta_path.read_bytes())
+        meta["convergence"]["review"]["draft"] += " Changed after review."
+        meta_path.write_text(json.dumps(meta), encoding="utf-8")
+        self.assertTrue(self.invoke("status", self.id)["completion_stale"])
+        outcome = self.invoke("verify", self.id, code=1)
+        self.assertEqual(outcome["review"]["status"], "blocked")
+        self.assertIn("draft changed", outcome["review"]["reason"])
+
+    def test_optional_waiver_is_explicit_and_policy_changes_revoke_completion(self):
+        proof = self.criterion("met", {"file": self.manual})
+        outcome = self.assess({"AC-001": proof, "AC-002": proof})
+        self.assertTrue(outcome["review_waived"])
+        result = self.invoke("set-status", self.id, "completed")
+        self.assertEqual(result["review"]["status"], "not_performed")
+        self.assertTrue(result["review_waived"])
+        changed = self.invoke("review-policy", self.id, "required", "--reason", "Require review again", "--decided-by", "test project")
+        self.assertEqual(changed["verification"], "unverified")
+        for status in ("blocked", "findings"):
+            self.assertFalse(self.assess({"AC-001": proof, "AC-002": proof},
+                                        review={"status": status, "reason": "Review impediment"}, code=1)["ready"])
+
+    def test_new_tasks_default_to_required_without_modifying_config(self):
+        before = (self.root / ".harness/harness.json").read_bytes()
+        task = self.invoke("new", "--mode", "full", "--title", "Required by default")
+        self.assertEqual(task["review_policy"]["mode"], "required")
+        self.assertEqual(before, (self.root / ".harness/harness.json").read_bytes())
+
+    def test_review_artifact_hash_and_policy_identification_are_validated(self):
+        proof = self.criterion("met", {"file": self.manual})
+        criteria = {"AC-001": proof, "AC-002": proof}
+        review_file = self.root / "review-output.txt"
+        review_file.write_text("Independent code and explanation review outcome", encoding="utf-8")
+        review = self.passed_review()
+        for entry in review["provenance"].values():
+            entry["artifact"] = "review-output.txt"
+        self.assess(criteria, review=review)
+        self.invoke("set-status", self.id, "completed")
+        review_file.write_text("Different review outcome", encoding="utf-8")
+        outcome = self.invoke("verify", self.id, code=1)
+        self.assertEqual(outcome["review"]["status"], "blocked")
+        self.assertIn("artifact changed", outcome["review"]["reason"])
+        self.assertTrue(self.invoke("status", self.id)["completion_stale"])
+        self.assertIn("reason", self.invoke("review-policy", self.id, "optional", "--reason", " ",
+                                           "--decided-by", "test project", code=2))
+        review = self.passed_review()
+        review["provenance"]["code"]["contract"] = {}
+        self.assertIn("provenance or contract", self.assess(criteria, review=review, code=2))
 
     def test_reassessment_distinguishes_failures_and_blockers_from_a_passing_check(self):
         report = self.report("label", "form", "pending", "optional", "broken")

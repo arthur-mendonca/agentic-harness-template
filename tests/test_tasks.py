@@ -161,6 +161,7 @@ class TaskTests(unittest.TestCase):
         for name, content in (("spec.md", SPEC), ("plan.md", PLAN), ("tasks.md", TASKS)):
             (self.root / promoted["path"] / name).write_bytes(content.encode("utf-8"))
         contract = self.invoke("verify", task["id"], exit_code=1)["contract"]
+        self.invoke("review-policy", task["id"], "optional", "--reason", "Explicit fixture waiver", "--decided-by", "test project")
         assessment = self.root / "assessment.json"
         assessment.write_text(json.dumps({
             "contract": contract,
