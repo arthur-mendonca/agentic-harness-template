@@ -10,6 +10,7 @@ import sys
 from harness.config import load_config
 from harness.installer import init_project
 from harness.project import PROJECT_FILES
+from harness.project_storage import ProjectGit
 from harness.project_update import update_project
 from harness.runner import main, run
 from harness.specs import SECTIONS
@@ -30,7 +31,13 @@ def snapshot(root):
 def exercise_modes(root):
     root.mkdir()
     assert init_project(root)['valid']
-    assert set(snapshot(root)) == {*PROJECT_FILES, '.gitignore', '.harness/harness.json'}
+    expected = {*PROJECT_FILES, '.harness/harness.json'}
+    git = ProjectGit(root)
+    if not git.active:
+        expected.add('.gitignore')
+    else:
+        git.verify_ignored({'.harness/', 'AGENTS.md'})
+    assert set(snapshot(root)) == expected
     preserved = {name: (root / name).read_bytes() for name in PROJECT_FILES}
     before = snapshot(root)
     assert invoke(root, ['sdd', 'new', '--mode', 'off', '--title', 'Direct'])['path'] is None

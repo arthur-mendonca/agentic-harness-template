@@ -2,18 +2,20 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
 from harness import __version__
 from harness.config import ConfigError, load_config
 from harness.installer import init_project, install_skills
+from harness.project import PROJECT_FILES
 from tests.helpers import directory_link, temporary_project
 
 
 class InstallerTests(unittest.TestCase):
     def setUp(self):
-        self.temp = temporary_project()
+        self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 
@@ -297,3 +299,249 @@ Acrescente somente restrições estáveis.
         with self.assertRaises(ConfigError):
             install_skills(destination, update=True)
         self.assertEqual(original.read_text(encoding="utf-8"), "preserve")
+
+
+class InstallerGitProtectionTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = temporary_project()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.git("init", "-q")
+
+    def git(self, *args, codes=(0,)):
+        result = subprocess.run(["git", "-C", str(self.root), *args], capture_output=True)
+        self.assertIn(result.returncode, codes, result.stderr.decode(errors="replace"))
+        return result.stdout
+
+    def assert_protected(self, project=None):
+        project = project or self.root
+        for path in (project / ".harness/harness.json", project / ".harness/results/probe.json"):
+            self.git("check-ignore", "--", str(path))
+        if not self.git("ls-files", "--", str(project / "AGENTS.md")):
+            self.git("check-ignore", "--", str(project / "AGENTS.md"))
+
+    def test_tracked_gitignore_and_index_are_unchanged_and_repeat_is_noop(self):
+        ignore = self.root / ".gitignore"
+        ignore.write_bytes(b"# Company rules\r\n*.tmp\r\n")
+        self.git("add", "--", ".gitignore")
+        index = (self.root / ".git/index").read_bytes()
+        status = self.git("status", "--porcelain", "--untracked-files=all")
+        init_project(self.root)
+        self.assertEqual(ignore.read_bytes(), b"# Company rules\r\n*.tmp\r\n")
+        self.assertEqual((self.root / ".git/index").read_bytes(), index)
+        self.assert_protected()
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), status)
+        before = {p.relative_to(self.root): (p.read_bytes(), p.stat().st_mtime_ns)
+                  for p in self.root.rglob("*") if p.is_file()}
+        result = init_project(self.root)
+        self.assertEqual(result["created"], [])
+        self.assertEqual(result["updated"], [])
+        self.assertEqual(before, {p.relative_to(self.root): (p.read_bytes(), p.stat().st_mtime_ns)
+                                 for p in self.root.rglob("*") if p.is_file()})
+
+    def test_tracked_agents_are_preserved_and_local_alternative_is_ignored(self):
+        agents = self.root / "AGENTS.md"
+        agents.write_bytes(b"# Corporate instructions\r\nKeep exactly.\r\n")
+        self.git("add", "--", "AGENTS.md")
+        index = self.git("ls-files", "--stage")
+        status = self.git("status", "--porcelain", "--untracked-files=all")
+        init_project(self.root)
+        self.assertEqual(agents.read_bytes(), b"# Corporate instructions\r\nKeep exactly.\r\n")
+        self.assertEqual((self.root / ".harness/AGENTS.md").read_bytes(), PROJECT_FILES["AGENTS.md"].encode())
+        self.assertEqual(self.git("ls-files", "--stage"), index)
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), status)
+        self.assert_protected()
+
+    def test_untracked_instructions_and_ignore_are_preserved(self):
+        (self.root / "AGENTS.md").write_bytes(b"Local rules\r\n")
+        (self.root / ".gitignore").write_bytes(b"*.tmp\r\n")
+        init_project(self.root)
+        self.assertEqual((self.root / "AGENTS.md").read_bytes(), b"Local rules\r\n")
+        self.assertEqual((self.root / ".gitignore").read_bytes(), b"*.tmp\r\n")
+        self.assert_protected()
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), b"?? .gitignore\n")
+
+    def test_tracked_local_alternative_aborts_before_mutations(self):
+        (self.root / "AGENTS.md").write_bytes(b"Corporate root instructions\n")
+        (self.root / ".harness").mkdir()
+        (self.root / ".harness/AGENTS.md").write_bytes(b"Corporate nested instructions\n")
+        self.git("add", "--", "AGENTS.md", ".harness/AGENTS.md")
+        before = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        with self.assertRaisesRegex(ConfigError, "prevents local harness instructions"):
+            init_project(self.root)
+        self.assertEqual(before, {p.relative_to(self.root): p.read_bytes()
+                                 for p in self.root.rglob("*") if p.is_file()})
+
+    def test_tracked_negation_aborts_before_creating_controls(self):
+        for pattern in (b"!.harness/\n", b"!AGENTS.md\n"):
+            with self.subTest(pattern=pattern):
+                (self.root / ".gitignore").write_bytes(pattern)
+                self.git("add", "--", ".gitignore")
+                exclude = (self.root / ".git/info/exclude").read_bytes()
+                with self.assertRaisesRegex(ConfigError, "ignore (rule exposes|verification failed)"):
+                    init_project(self.root)
+                self.assertFalse((self.root / "AGENTS.md").exists())
+                self.assertFalse((self.root / ".harness").exists())
+                self.assertEqual((self.root / ".gitignore").read_bytes(), pattern)
+                self.assertEqual((self.root / ".git/info/exclude").read_bytes(), exclude)
+
+    def test_nested_projects_use_local_untracked_ignore_without_exposing_it(self):
+        for name in ("nested", "path with spaces/ação[1]"):
+            with self.subTest(name=name):
+                project = self.root / name
+                project.mkdir(parents=True)
+                ignore = project / ".gitignore"
+                ignore.write_bytes(b"*.tmp\n")
+                exclude = (self.root / ".git/info/exclude").read_bytes()
+                init_project(project)
+                self.assert_protected(project)
+                self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), b"")
+                self.assertEqual((self.root / ".git/info/exclude").read_bytes(), exclude)
+                self.assertTrue(ignore.read_bytes().startswith(b"*.tmp\n"))
+
+    def test_nested_tracked_ignore_fails_safely_when_local_exclusion_is_unavailable(self):
+        project = self.root / "nested"
+        project.mkdir()
+        ignore = project / ".gitignore"
+        ignore.write_bytes(b"*.tmp\n")
+        self.git("add", "--", "nested/.gitignore")
+        with self.assertRaises(ConfigError):
+            init_project(project)
+        self.assertEqual(ignore.read_bytes(), b"*.tmp\n")
+        self.assertFalse((project / ".harness").exists())
+        self.assertFalse((project / "AGENTS.md").exists())
+
+    def test_path_conflict_is_detected_before_ignore_changes(self):
+        (self.root / ".harness").mkdir()
+        (self.root / ".harness/results").write_bytes(b"Keep conflict")
+        exclude = (self.root / ".git/info/exclude").read_bytes()
+        with self.assertRaises(ConfigError):
+            init_project(self.root)
+        self.assertEqual((self.root / ".git/info/exclude").read_bytes(), exclude)
+        self.assertFalse((self.root / "AGENTS.md").exists())
+
+    def test_linked_exclude_directory_is_rejected_without_touching_target(self):
+        with temporary_project() as external:
+            outside = Path(external)
+            (outside / "exclude").write_bytes(b"Keep external data\n")
+            (self.root / ".git/info/exclude").unlink()
+            (self.root / ".git/info").rmdir()
+            directory_link(self.root / ".git/info", outside)
+            with self.assertRaises(ConfigError):
+                init_project(self.root)
+            self.assertEqual((outside / "exclude").read_bytes(), b"Keep external data\n")
+            self.assertFalse((self.root / ".harness").exists())
+            self.assertFalse((self.root / "AGENTS.md").exists())
+
+    def test_internal_directory_link_is_also_rejected(self):
+        (self.root / "other").mkdir()
+        directory_link(self.root / ".harness", self.root / "other")
+        with self.assertRaises(ConfigError):
+            init_project(self.root)
+        self.assertEqual(list((self.root / "other").iterdir()), [])
+
+    def test_exclude_write_failure_creates_no_controls(self):
+        exclude = (self.root / ".git/info/exclude").read_bytes()
+        with patch("harness.installer.atomic_write", side_effect=PermissionError("Denied exclude")):
+            with self.assertRaisesRegex(PermissionError, "Denied exclude"):
+                init_project(self.root)
+        self.assertFalse((self.root / ".harness").exists())
+        self.assertFalse((self.root / "AGENTS.md").exists())
+        self.assertEqual((self.root / ".git/info/exclude").read_bytes(), exclude)
+
+    def test_readonly_exclude_is_rejected_in_preflight(self):
+        import stat
+
+        exclude = self.root / ".git/info/exclude"
+        original_mode = exclude.stat().st_mode
+        exclude.chmod(stat.S_IREAD)
+        self.addCleanup(exclude.chmod, original_mode)
+        with self.assertRaises(ConfigError):
+            init_project(self.root)
+        self.assertFalse((self.root / ".harness").exists())
+        self.assertFalse((self.root / "AGENTS.md").exists())
+
+    def test_partial_control_write_rolls_back_and_keeps_protection(self):
+        open_file = Path.open
+
+        def fail_config(path, *args, **kwargs):
+            if path.name == "harness.json" and args == ("xb",):
+                raise OSError("Simulated control write failure")
+            return open_file(path, *args, **kwargs)
+
+        with patch.object(Path, "open", fail_config):
+            with self.assertRaisesRegex(OSError, "Simulated control write failure"):
+                init_project(self.root)
+        self.assertFalse((self.root / "AGENTS.md").exists())
+        self.assertFalse((self.root / ".harness").exists())
+        self.assert_protected()
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), b"")
+        init_project(self.root)
+        self.assert_protected()
+
+    def test_failure_during_write_removes_partial_content_and_preserves_existing_files(self):
+        agents = self.root / "AGENTS.md"
+        agents.write_bytes(b"Preserve local instructions\r\n")
+        open_file = Path.open
+
+        class PartialWriter:
+            def __enter__(self):
+                self.stream = open_file(self.root / ".harness/pendencias.md", "xb")
+                return self
+
+            def write(self, data):
+                self.stream.write(data[:10])
+                raise OSError("Failure after partial content")
+
+            def __exit__(self, *args):
+                self.stream.close()
+
+        writer = PartialWriter()
+        writer.root = self.root
+
+        def fail_pending(path, *args, **kwargs):
+            if path.name == "pendencias.md" and args == ("xb",):
+                return writer
+            return open_file(path, *args, **kwargs)
+
+        with patch.object(Path, "open", fail_pending):
+            with self.assertRaisesRegex(OSError, "Failure after partial content"):
+                init_project(self.root)
+        self.assertEqual(agents.read_bytes(), b"Preserve local instructions\r\n")
+        self.assertFalse((self.root / ".harness").exists())
+        self.assert_protected()
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), b"")
+
+    def test_controls_are_ignored_before_the_first_directory_is_created(self):
+        mkdir = Path.mkdir
+
+        def check_before_mkdir(path, *args, **kwargs):
+            if path == self.root / ".harness":
+                self.assertFalse(path.exists())
+                self.assert_protected()
+            return mkdir(path, *args, **kwargs)
+
+        with patch.object(Path, "mkdir", check_before_mkdir):
+            init_project(self.root)
+
+    def test_readonly_control_directory_aborts_before_changing_exclude(self):
+        exclude = (self.root / ".git/info/exclude").read_bytes()
+        with patch("harness.project_storage.os.access", return_value=False):
+            with self.assertRaisesRegex(ConfigError, "cannot write"):
+                init_project(self.root)
+        self.assertFalse((self.root / ".harness").exists())
+        self.assertFalse((self.root / "AGENTS.md").exists())
+        self.assertEqual((self.root / ".git/info/exclude").read_bytes(), exclude)
+
+    def test_deleted_tracked_instructions_are_not_recreated(self):
+        agents = self.root / "AGENTS.md"
+        agents.write_bytes(b"Tracked instructions\n")
+        self.git("add", "--", "AGENTS.md")
+        agents.unlink()
+        index = self.git("ls-files", "--stage")
+        status = self.git("status", "--porcelain", "--untracked-files=all")
+        init_project(self.root)
+        self.assertFalse(agents.exists())
+        self.assertTrue((self.root / ".harness/AGENTS.md").is_file())
+        self.assertEqual(self.git("ls-files", "--stage"), index)
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), status)

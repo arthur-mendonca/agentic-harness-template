@@ -35,7 +35,20 @@ def local_path(root, name):
 class ProjectGit:
     def __init__(self, root):
         self.root = root
-        self.active = any((parent / ".git").exists() for parent in (root, *root.parents))
+        metadata_root = next((parent for parent in (root, *root.parents)
+                              if (parent / ".git").exists() or (parent / ".git").is_symlink()), None)
+        self.active = metadata_root is not None
+        if self.active:
+            local_path(metadata_root, ".git")
+            if (metadata_root / ".git").is_dir():
+                local_path(metadata_root, ".git/info/exclude")
+            self.worktree = Path(os.fsdecode(self.run("rev-parse", "--show-toplevel").rstrip(b"\r\n")))
+            if not root.is_relative_to(self.worktree):
+                raise ConfigError("Project is outside the Git worktree")
+            for parent in (root, *root.parents):
+                local_path(parent, ".gitignore")
+                if parent == self.worktree:
+                    break
         self.tracked = self.index() if self.active else {}
 
     def run(self, *args, codes=(0,), data=None):
@@ -94,7 +107,28 @@ class ProjectGit:
             blocked.update({path: f"Git exclusions for {path} require a change outside the project or in a tracked .gitignore"
                             for path in rules})
             return None, blocked
+        local_path(self.root, name)
+        if name == ".gitignore":
+            rules[".gitignore"] = "/.gitignore"
         return (name, sorted(set(rules.values()))), blocked
+
+    def verify_ignored(self, paths):
+        if not self.active:
+            return
+        rules = self.ignore_rules(paths)
+        exposed = [name for name in paths if name not in rules or not rules[name][1]
+                   or rules[name][1].startswith(b"!")]
+        if exposed:
+            raise ConfigError(f"Git ignore verification failed for: {', '.join(sorted(exposed))}")
+
+
+def writable_path(root, name):
+    path = local_path(root, name)
+    parent = path.parent
+    while not parent.exists():
+        parent = parent.parent
+    return (os.access(parent, os.W_OK) and bool(parent.stat().st_mode & stat.S_IWRITE)
+            and (not path.exists() or bool(path.stat().st_mode & stat.S_IWRITE)))
 
 
 def atomic_write(path, data, *, exclusive=False):

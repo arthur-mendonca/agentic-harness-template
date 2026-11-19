@@ -347,6 +347,7 @@ class TaskTests(unittest.TestCase):
             self.assertEqual(command.returncode, 0, command.stderr)
 
         git("init", "-q")
+        init_project(self.root)
         task = self.new("Tarefa rastreada", "--mode", "lite")
         path = f"{task['path']}/meta.json"
         original = (self.root / path).read_bytes()
@@ -362,6 +363,7 @@ class TaskTests(unittest.TestCase):
             self.assertEqual(command.returncode, 0, command.stderr)
 
         git("init", "-q")
+        init_project(self.root)
         task = self.new("Mudança concorrente no Git", "--mode", "lite")
         folder = self.root / task["path"]
         atomic = tasks.atomic_write

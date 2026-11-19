@@ -12,7 +12,7 @@ import uuid
 from harness import __version__
 from harness.config import ConfigError, contained_path, load_config, new_config, read_json
 from harness.project import PROJECT_FILES
-from harness.project_storage import atomic_write
+from harness.project_storage import ProjectGit, atomic_write, local_path, writable_path
 from harness.sdd_policy import MODES
 
 CORE_SKILLS = ("verified-development", "code-investigation", "tdd-implementation", "http-homologation")
@@ -104,11 +104,11 @@ def inspect_project(root):
 
 def _preflight(root, files, directories):
     for relative in directories:
-        path = contained_path(root, relative)
+        path = local_path(root, relative)
         if path.exists() and not path.is_dir():
             raise ConfigError(f"Expected a directory, preserved conflicting path: {path}")
     for relative in files:
-        path = contained_path(root, relative)
+        path = local_path(root, relative)
         if path.exists() and not path.is_file():
             raise ConfigError(f"Expected a file, preserved conflicting path: {path}")
         # Do not change a different file through an existing symlink.
@@ -121,17 +121,23 @@ def init_project(project):
     if not root.is_dir():
         raise ConfigError(f"Destination must be an existing directory: {root}")
     _preflight(root, (*PROJECT_FILES, ".harness/harness.json", "harness.json", ".gitignore"), (".harness", ".harness/memoria", ".harness/results"))
+    git = ProjectGit(root)
     inspection, checks = inspect_project(root)
     config = new_config(root, checks)
     if (root / "harness.json").exists() or (root / ".harness/harness.json").exists():
         load_config(root)  # Fail before writing anything if the preserved config is incompatible.
     proposals = dict(PROJECT_FILES)
+    if git.tracks("AGENTS.md"):
+        if git.tracks(".harness/AGENTS.md"):
+            raise ConfigError("Tracked .harness/AGENTS.md prevents local harness instructions")
+        proposals[".harness/AGENTS.md"] = proposals.pop("AGENTS.md")
     if (root / "memoria").exists() and not (root / ".harness/memoria").exists():
         proposals = {name: text for name, text in proposals.items() if not name.startswith(".harness/memoria/")}
     if any((root / name).exists() for name in LEGACY_PENDING):
         proposals.pop(".harness/pendencias.md")
     if not (root / "harness.json").exists() or (root / ".harness/harness.json").exists():
         proposals[".harness/harness.json"] = json.dumps(config, ensure_ascii=False, indent=2) + "\n"
+    _preflight(root, proposals, ())
     summary = {"root": str(root), "created": [], "preserved": [], "updated": [], "differences": {},
                "legacy_files": [name for name in ("harness.json", "memoria", *LEGACY_PENDING) if (root / name).exists()],
                "inspection": inspection, "configured": [], "pending": [], "valid": False, "checks_executed": False}
@@ -144,29 +150,83 @@ def init_project(project):
             if previous != text:
                 summary["differences"][name] = list(difflib.unified_diff(
                     previous.splitlines(), text.splitlines(), fromfile=f"existing/{name}", tofile=f"proposed/{name}", lineterm=""))
-    ignore = root / ".gitignore"
-    ignore_existed = ignore.exists()
-    previous_ignore = ignore.read_bytes() if ignore_existed else b""
-    patterns = [line.strip() for line in previous_ignore.decode("utf-8-sig").splitlines() if line.strip() and not line.lstrip().startswith("#")]
-    directories = {str(Path(name).parent).replace("\\", "/") for name in proposals if "/" in name}
-    for relative in sorted(directories | {".harness/results"}):
-        path = root / relative
-        if not path.exists():
-            path.mkdir(parents=True, exist_ok=True)
-            summary["created"].append(relative + "/")
-    for name, text in proposals.items():
-        path = root / name
-        if not path.exists():
-            with path.open("x", encoding="utf-8", newline="\n") as stream:
-                stream.write(text)
-            summary["created"].append(name)
-    if not patterns or patterns[-1] not in (".harness/", "/.harness/"):
-        with ignore.open("ab") as stream:
-            stream.write((b"\n" if previous_ignore and not previous_ignore.endswith(b"\n") else b"") + b".harness/\n")
-        summary["updated" if ignore_existed else "created"].append(".gitignore")
+    protected = {name for name in proposals if not git.tracks(name)} | {".harness/"}
+    if git.active:
+        exclusion, blocked = git.local_excludes(protected)
+        if blocked:
+            raise ConfigError("; ".join(sorted(set(blocked.values()))))
     else:
-        summary["preserved"].append(".gitignore")
-    final = load_config(root)
+        exclusion = (".gitignore", ["/AGENTS.md", ".harness/"])
+    ignore_name, previous_ignore, proposed_ignore = None, None, None
+    if exclusion:
+        ignore_name, rules = exclusion
+        _preflight(root, (ignore_name,), ())
+        ignore = local_path(root, ignore_name)
+        previous_ignore = ignore.read_bytes() if ignore.exists() else None
+        previous = previous_ignore or b""
+        suffix = ("\n".join(rules) + "\n").encode("utf-8")
+        if git.active or not previous.endswith(suffix):
+            proposed_ignore = previous + (b"\n" if previous and not previous.endswith(b"\n") else b"") + suffix
+        else:
+            summary["preserved"].append(ignore_name)
+    directories = {str(Path(name).parent).replace("\\", "/") for name in proposals if "/" in name}
+    directories |= {".harness", ".harness/results"}
+    missing = {name: text.encode("utf-8") for name, text in proposals.items() if not (root / name).exists()}
+    for name in missing:
+        if git.tracks(name):
+            raise ConfigError(f"Refusing to recreate missing tracked file: {name}")
+    pending_writes = [*missing, *(name for name in directories if not (root / name).exists())]
+    if proposed_ignore is not None:
+        pending_writes.append(ignore_name)
+    for name in pending_writes:
+        if not writable_path(root, name):
+            raise ConfigError(f"Installation cannot write {name}")
+    if git.active and git.index() != git.tracked:
+        raise ConfigError("Git index changed during installation preflight; retry")
+    if proposed_ignore is not None:
+        atomic_write(local_path(root, ignore_name), proposed_ignore)
+        summary["updated" if previous_ignore is not None else "created"].append(ignore_name)
+    try:
+        git.verify_ignored(protected | ({".gitignore"} if ignore_name == ".gitignore" and git.active else set()))
+    except (ConfigError, OSError):
+        if proposed_ignore is not None:
+            if previous_ignore is None:
+                local_path(root, ignore_name).unlink()
+            else:
+                atomic_write(local_path(root, ignore_name), previous_ignore)
+        raise
+    created_files, created_directories = [], []
+    try:
+        for relative in sorted(directories, key=lambda name: (len(Path(name).parts), name)):
+            path = local_path(root, relative)
+            if not path.exists():
+                path.mkdir()
+                created_directories.append(relative)
+                summary["created"].append(relative + "/")
+        for name, data in missing.items():
+            with local_path(root, name).open("xb") as stream:
+                created_files.append(name)
+                stream.write(data)
+            summary["created"].append(name)
+        final = load_config(root)
+        git.verify_ignored(protected)
+        if git.active and git.index() != git.tracked:
+            raise ConfigError("Git index changed during installation; retry")
+    except (OSError, ConfigError, KeyboardInterrupt) as exc:
+        failures = []
+        for name in reversed(created_files):
+            try:
+                local_path(root, name).unlink()
+            except (OSError, ConfigError):
+                failures.append(name)
+        for name in reversed(created_directories):
+            try:
+                local_path(root, name).rmdir()
+            except (OSError, ConfigError):
+                failures.append(name + "/")
+        if failures:
+            raise ConfigError(f"Installation could not roll back {', '.join(failures)}; local exclusions retained") from exc
+        raise
     summary["configured"] = [name for name, check in final["checks"].items() if check["state"] == "configured"]
     summary["pending"] = [name for name, check in final["checks"].items() if check["state"] == "unconfigured"]
     summary["valid"] = True

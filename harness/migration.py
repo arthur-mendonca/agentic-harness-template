@@ -7,14 +7,14 @@ import os
 from pathlib import Path
 import re
 import shutil
-import stat
 import uuid
 
 from harness import __version__
 from harness.config import SCHEMA_VERSION, ConfigError, discover_root, load_config, new_config, read_json, upgrade_config
 from harness.installer import inspect_project
 from harness.project import PROJECT_FILES
-from harness.project_storage import ProjectGit as _Git, atomic_write as _atomic_write, local_path as _local_path, project_lock
+from harness.project_storage import (ProjectGit as _Git, atomic_write as _atomic_write,
+                                     local_path as _local_path, project_lock, writable_path as _writable)
 
 STATE = ".harness/migration-state.json"
 MIGRATION_VERSION = 1
@@ -383,14 +383,6 @@ def _load_state(plan):
     return state, dict(sources)
 
 
-def _writable(root, name):
-    path = _local_path(root, name)
-    parent = path.parent
-    while not parent.exists():
-        parent = parent.parent
-    return os.access(parent, os.W_OK) and (not path.exists() or bool(path.stat().st_mode & stat.S_IWRITE))
-
-
 def _preflight_writes(plan, names):
     for name in names:
         if not _writable(plan.root, name):
@@ -435,8 +427,7 @@ def _apply_locked(plan, state_data):
             _assert_original(plan, name)
             _atomic_write(_local_path(plan.root, name), plan.writes[name])
             modified[name] = plan.writes[name]
-        if any(not pattern or pattern.startswith(b"!") for _, pattern in plan.git.ignore_rules(plan.protected).values()):
-            raise ConfigError("Git ignore verification failed for migration paths")
+        plan.git.verify_ignored(plan.protected)
         ignores_verified = True
         plan.directory(".harness/results").mkdir(parents=True, exist_ok=True)
         for name, data in plan.writes.items():
