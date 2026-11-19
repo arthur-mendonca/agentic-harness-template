@@ -1,13 +1,13 @@
 ﻿# Harness Agêntico Verificável
 
-Esta é a fonte reutilizável do executor e do comando de preparação de projetos, acompanhada de quatro Agent Skills para cópia independente ao computador onde o Codex será utilizado. Projetos consumidores podem usar qualquer linguagem; precisam apenas de Python para executar o harness. O executor e o instalador de projetos funcionam sem a pasta `skills/` e sem skills globais instaladas.
+Esta é a fonte reutilizável do executor e do comando de preparação de projetos, acompanhada de quatro Agent Skills de desenvolvimento e quatro adaptadores SDD para o Codex. Projetos consumidores podem usar qualquer linguagem; precisam apenas de Python para executar o harness. O executor e o instalador de projetos funcionam sem a pasta `skills/` e sem skills globais instaladas.
 
 ## Requisitos e estrutura
 
 Python 3.11–3.14, Windows e Linux. Sem dependências Python em tempo de execução. A construção do pacote utiliza setuptools; Git é necessário apenas para instalar diretamente do repositório. Ferramentas dos checks pertencem ao projeto consumidor e não são instaladas automaticamente.
 
 - `harness/`: validação, execução e instalador centralizados. `harness/project.py` define os controles gerados diretamente no destino; não há pasta de templates.
-- `skills/`: versões oficiais das quatro skills, usadas somente na operação explícita de cópia para o Codex; não integram o pacote Python instalado.
+- `skills/`: skills de desenvolvimento e adaptadores SDD, distribuídos pela operação explícita de cópia para o Codex.
 - `tests/`: testes locais com projetos temporários, sem APIs ou bancos de dados.
 - `.github/workflows/tests.yml`: execução automatizada dos testes em Windows/Linux e Python 3.11–3.14, conforme solicitado inicialmente.
 - `setup.py`: interface do instalador e compatibilidade com o backend de empacotamento.
@@ -78,6 +78,17 @@ python -m harness update --project . --migration-review CAMINHO_DO_JSON
 O comando confere os hashes das fontes e dos destinos antes de aplicar a revisão. Conserva relatórios rastreados e arquiva os selecionados depois da consolidação. `.harness/migration-state.json` guarda o estado e permite retomar progresso parcial. Repetir o comando sem novidades preserva os arquivos e os backups existentes. A aplicação retorna código 3 enquanto houver revisão pendente ou conflito indicado no JSON.
 
 ### Modos e tarefas SDD
+
+Selecione a modalidade no Codex CLI ou na extensão do IDE com `$` ou pelo seletor `/skills`. [Documentação de skills do Codex](https://learn.chatgpt.com/docs/build-skills#how-chatgpt-and-codex-use-skills)
+
+```text
+$sdd-auto Corrija a validação da entrega.
+$sdd-lite Ajuste a mensagem de erro.
+$sdd-full Implemente a otimização de consultas ao Google Maps.
+$sdd-off Corrija este texto sem criar documentos.
+```
+
+Os adaptadores encaminham o modo escolhido ao `verified-development`. Em trabalho gerenciado, o coordenador prepara os controles legados antes de criar ou retomar a tarefa. Um pedido simples de correção sem escolha de modo segue a política do projeto.
 
 Em `.harness/harness.json` (schema 2), use `"sdd": {"mode": "auto"}` para configurar o padrão. As opções são `auto`, `lite`, `full` e `off`. O parâmetro `--mode` prevalece para uma nova tarefa. O modo efetivo `lite` cria `meta.json` e `tarefa.md`. O modo `full` cria `meta.json`, `spec.md`, `plan.md` e `tasks.md`. Um novo trabalho em `off` segue sem arquivos de tarefa.
 
@@ -224,9 +235,11 @@ python -m harness.installer skills --update
 python -m harness.installer skills --source "C:\caminho\harness-fonte\skills" --destination "C:\Users\User\.agents\skills"
 ```
 
-O destino padrão é `~/.agents/skills/` (por exemplo `C:\Users\User\.agents\skills`). No checkout, a origem padrão é sua pasta `skills/`; ao usar apenas o pacote Python instalado, informe `--source CAMINHO` para a pasta de skills da fonte, ou copie manualmente as quatro pastas. O pacote não procura nem carrega skills ao executar checks ou preparar projetos.
+O destino padrão é `~/.agents/skills/` (por exemplo `C:\Users\User\.agents\skills`). No checkout, a origem padrão é sua pasta `skills/`. Ao usar o pacote Python instalado, informe `--source CAMINHO` para a pasta de skills do checkout. Uma origem explícita que contenha somente o conjunto antigo continua instalando as quatro skills de desenvolvimento. A distribuição atual inclui as oito pastas.
 
 `--destination CAMINHO` permite outro destino, inclusive `~/.codex/skills/` quando esse for o caminho escolhido na máquina. Conteúdos iguais são preservados; conteúdos diferentes são relatados como conflitos. Somente `--update` substitui `SKILL.md`, mantendo uma cópia `SKILL.md.backup-<identificador>` e os demais arquivos da skill. Os testes sempre usam destinos temporários e não alteram as skills globais.
+
+Os adaptadores SDD usam o coordenador `verified-development` da mesma distribuição. Se a instalação listar um conflito nesse arquivo, resolva o conflito para usar o fluxo SDD deste checkout.
 
 As quatro skills `verified-development`, `code-investigation`, `tdd-implementation` e `http-homologation` foram copiadas das instalações acessíveis em `~/.agents/skills/` e adaptadas ao executor compartilhado. Todas identificam sua versão em `metadata.version`. Para revisão adversarial, o coordenador utiliza diretamente a skill nativa `review-agent` do Codex, que não é distribuída nem instalada por este pacote. Se a skill ou a execução independente não estiver disponível, a revisão deve ser registrada como não realizada. O coordenador exige investigação, testes e revisão em execução independente; HTTP só se aplica a interfaces afetadas. Commits e deploys dependem de autorização explícita do desenvolvedor.
 

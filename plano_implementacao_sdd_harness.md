@@ -166,6 +166,8 @@ projeto-consumidor/
 
 ### ETAPA 4 — Disponibilizar modalidades como skills invocáveis no Codex
 
+**Status** · Implementada e verificada com 126 testes no Windows, descoberta no catálogo do Codex e cinco cenários em projetos descartáveis.
+
 **Objetivo:** ativar o fluxo pelo nome da skill, com interação mínima.
 
 **Arquivos propostos:** `skills/sdd-auto/SKILL.md`, `skills/sdd-lite/SKILL.md`, `skills/sdd-full/SKILL.md`, opcional `skills/sdd-off/SKILL.md`; atualizar `harness/installer.py`, skill `verified-development` e testes de instalação/skills.
@@ -183,12 +185,12 @@ $sdd-off Corrija este texto sem criar documentos.
 
 **Tarefas:**
 
-- [ ] Definir cada skill como um adaptador fino que seleciona a modalidade e chama o fluxo coordenado de `verified-development`, sem duplicar centenas de linhas de instruções.
-- [ ] Dar precedência às invocações explícitas sobre a classificação `auto`.
-- [ ] Instalar/atualizar skills globalmente de modo explícito, preservando as quatro anteriores e fazendo backup em caso de conflito.
-- [ ] Quando a skill for invocada dentro de projeto antigo, iniciar a ETAPA 2 antes de criar/continuar a tarefa.
-- [ ] Criar exemplos e testes de gatilho negativo (por exemplo, solicitação banal não deve acionar `full` automaticamente).
-- [ ] Verificar que o executor Python continua independente das skills e de um modelo específico.
+- [x] Definir cada skill como um adaptador fino que seleciona a modalidade e chama o fluxo coordenado de `verified-development`, sem duplicar centenas de linhas de instruções.
+- [x] Dar precedência às invocações explícitas sobre a classificação `auto`.
+- [x] Instalar/atualizar skills globalmente de modo explícito, preservando as quatro anteriores e fazendo backup em caso de conflito.
+- [x] Quando a skill for invocada dentro de projeto antigo, iniciar a ETAPA 2 antes de criar/continuar a tarefa.
+- [x] Criar exemplos e testes de gatilho negativo (por exemplo, solicitação banal não deve acionar `full` automaticamente).
+- [x] Verificar que o executor Python continua independente das skills e de um modelo específico.
 
 **Critérios de aceitação:** invocação `$sdd-lite` gera apenas tarefa simplificada; `$sdd-full` usa três documentos; `$sdd-auto` decide; `$sdd-off` não cria documentação. As quatro skills pré-existentes continuam operacionais.
 

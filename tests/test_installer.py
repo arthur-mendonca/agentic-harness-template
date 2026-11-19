@@ -172,7 +172,10 @@ Acrescente somente restrições estáveis.
         init_project(self.root)
         self.assertFalse(destination.exists())
         first = install_skills(destination)
-        self.assertEqual(set(first["created"]), {"verified-development", "code-investigation", "tdd-implementation", "http-homologation"})
+        self.assertEqual(set(first["created"]), {
+            "verified-development", "code-investigation", "tdd-implementation", "http-homologation",
+            "sdd-auto", "sdd-lite", "sdd-full", "sdd-off",
+        })
         self.assertEqual({path.name for path in destination.iterdir()}, set(first["created"]))
         target = destination / "code-investigation" / "SKILL.md"
         target.write_text("my custom skill", encoding="utf-8")
@@ -190,7 +193,7 @@ Acrescente somente restrições estáveis.
         with patch("harness.installer.Path.home", return_value=self.root):
             summary = install_skills()
         self.assertEqual(Path(summary["destination"]), self.root / ".agents" / "skills")
-        self.assertEqual(len(summary["created"]), 4)
+        self.assertEqual(len(summary["created"]), 8)
         self.assertFalse((self.root / ".codex").exists())
 
     def test_explicit_skill_source_and_missing_source_preserve_destination(self):
@@ -208,6 +211,36 @@ Acrescente somente restrições estáveis.
         with self.assertRaises(ConfigError):
             install_skills(missing_destination, source=self.root / "missing")
         self.assertFalse(missing_destination.exists())
+
+    def test_upgrade_installs_mode_skills_and_backs_up_custom_coordinator(self):
+        destination = self.root / "skills"
+        source = Path(__file__).resolve().parents[1] / "skills"
+        coordinator = destination / "verified-development/SKILL.md"
+        coordinator.parent.mkdir(parents=True)
+        coordinator.write_bytes(b"My locally customized coordinator\r\n")
+
+        upgraded = install_skills(destination, update=True, source=source)
+
+        self.assertEqual(upgraded["updated"], ["verified-development"])
+        self.assertEqual(Path(upgraded["backups"][0]).read_bytes(), b"My locally customized coordinator\r\n")
+        self.assertEqual(coordinator.read_text(encoding="utf-8"), (source / "verified-development/SKILL.md").read_text(encoding="utf-8"))
+        self.assertEqual({name for name in upgraded["created"] if name.startswith("sdd-")}, {
+            "sdd-auto", "sdd-lite", "sdd-full", "sdd-off",
+        })
+        self.assertEqual(install_skills(destination, update=True, source=source)["backups"], [])
+
+    def test_partial_sdd_skill_source_fails_before_installing_any_skills(self):
+        source = self.root / "source-skills"
+        names = ("verified-development", "code-investigation", "tdd-implementation", "http-homologation", "sdd-lite")
+        for name in names:
+            target = source / name / "SKILL.md"
+            target.parent.mkdir(parents=True)
+            target.write_text(f"Skill {name}\n", encoding="utf-8")
+
+        destination = self.root / "destination-skills"
+        with self.assertRaisesRegex(ConfigError, "Skill source missing"):
+            install_skills(destination, source=source)
+        self.assertFalse(destination.exists())
 
     def test_setup_entry_point(self):
         result = subprocess.run([sys.executable, "setup.py", str(self.root)], capture_output=True, text=True)

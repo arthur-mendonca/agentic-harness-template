@@ -12,8 +12,11 @@ import uuid
 from harness import __version__
 from harness.config import ConfigError, contained_path, load_config, new_config, read_json
 from harness.project import PROJECT_FILES
+from harness.project_storage import atomic_write
+from harness.sdd_policy import MODES
 
-SKILLS = ("verified-development", "code-investigation", "tdd-implementation", "http-homologation")
+CORE_SKILLS = ("verified-development", "code-investigation", "tdd-implementation", "http-homologation")
+SDD_SKILLS = tuple(f"sdd-{mode}" for mode in MODES)
 CONVENTIONAL = ("prepare", "lint", "types", "test", "build")
 
 
@@ -172,22 +175,24 @@ def install_skills(destination=None, update=False, source=None):
     root = Path(destination if destination is not None else Path.home() / ".agents" / "skills").expanduser().resolve()
     if root.exists() and not root.is_dir():
         raise ConfigError(f"Skills destination is not a directory: {root}")
-    _preflight(root, [f"{name}/SKILL.md" for name in SKILLS], SKILLS)
     source_root = Path(source if source is not None else Path(__file__).resolve().parent.parent / "skills").expanduser().resolve()
+    has_adapters = source is None or any((source_root / name).exists() or (source_root / name).is_symlink() for name in SDD_SKILLS)
+    names = (*CORE_SKILLS, *SDD_SKILLS) if has_adapters else CORE_SKILLS
+    _preflight(root, [f"{name}/SKILL.md" for name in names], names)
     # Skill files are read only by this explicit copy operation, never by init/run.
     sources = {}
-    for name in SKILLS:
+    for name in names:
         source_file = contained_path(source_root, f"{name}/SKILL.md")
         if not source_file.is_file():
             raise ConfigError(f"Skill source missing: {source_file}. Supply --source PATH_TO_SKILLS from the source checkout")
-        sources[name] = source_file.read_text(encoding="utf-8")
+        sources[name] = source_file.read_text(encoding="utf-8").encode("utf-8")
     summary = {"source": str(source_root), "destination": str(root), "version": __version__, "created": [], "preserved": [],
                "updated": [], "backups": [], "conflicts": []}
-    for name, text in sources.items():
+    for name, data in sources.items():
         target = root / name / "SKILL.md"
         if target.exists():
             previous = target.read_bytes()
-            if previous == text.encode("utf-8"):
+            if previous == data:
                 summary["preserved"].append(name)
                 continue
             if not update:
@@ -196,12 +201,14 @@ def install_skills(destination=None, update=False, source=None):
             backup = target.with_name(f"SKILL.md.backup-{uuid.uuid4().hex}")
             with backup.open("xb") as stream:
                 stream.write(previous)
+            atomic_write(target, data)
             summary["backups"].append(str(backup))
             summary["updated"].append(name)
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("xb") as stream:
+                stream.write(data)
             summary["created"].append(name)
-        target.write_text(text, encoding="utf-8", newline="\n")
     return summary
 
 
@@ -215,7 +222,7 @@ def main(argv=None):
     subparsers = parser.add_subparsers(dest="operation", required=True)
     init = subparsers.add_parser("init", help="Inspect and prepare an existing project directory")
     init.add_argument("project")
-    skills = subparsers.add_parser("skills", help="Explicitly install the four global Agent Skills")
+    skills = subparsers.add_parser("skills", help="Explicitly install the Agent Skills and SDD mode adapters")
     skills.add_argument("--source", help="Source skills directory; default: skills/ next to the source harness directory")
     skills.add_argument("--destination", help="Default: ~/.agents/skills/")
     skills.add_argument("--update", action="store_true", help="Replace differing SKILL.md files, preserving backups")

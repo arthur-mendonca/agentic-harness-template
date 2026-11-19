@@ -56,6 +56,14 @@ class TaskTests(unittest.TestCase):
                 self.assertEqual(task["mode"], "full")
                 self.assertEqual(self.documents(task), {"meta.json", "spec.md", "plan.md", "tasks.md"})
 
+    def test_resuming_a_trivial_task_with_explicit_auto_keeps_the_lite_layout(self):
+        task = self.new("Retomar ajuste de rótulo", "--mode", "lite")
+        resumed = self.invoke("mode", task["id"], "auto", "--assessed-low")
+        self.assertEqual(resumed["id"], task["id"])
+        self.assertEqual(resumed["mode"], "lite")
+        self.assertEqual(self.documents(resumed), {"meta.json", "tarefa.md"})
+        self.assertEqual(len(self.invoke("list")["tasks"]), 1)
+
     def test_off_has_no_files_and_an_explicit_mode_overrides_config(self):
         path = self.root / ".harness/harness.json"
         config = load_config(self.root)
