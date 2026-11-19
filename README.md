@@ -269,6 +269,30 @@ AGENTS.md
 
 `.harness/pendencias.md` contém ações futuras concretas e relevantes. Ao concluir, atualize ou remova a entrada conforme a relevância histórica.
 
+Para registrar uma descoberta fora do escopo selecionada pelo agente, salve um JSON temporário e execute `python -m harness sdd finding --input achado.json --mode lite` (ou `full`, conforme a tarefa):
+
+```json
+{
+  "relevant": true,
+  "component": "src/maps.py:calculateBestDistance",
+  "problem": "chamadas-distance-matrix-repetidas",
+  "category": "risco",
+  "state": "hipótese",
+  "description": "Possível custo desnecessário por cálculo de distância.",
+  "evidence": [{"file": "src/maps.py", "detail": "calculateBestDistance contém três chamadas à API no caminho principal."}],
+  "impact": "Até três requisições por cálculo; volume e custo real ainda não medidos.",
+  "action": "Discutir se uma requisição cobre os mesmos destinos.",
+  "origin": "001-otimizar-distancias",
+  "persistent": true
+}
+```
+
+Use arquivos e observações reais do consumidor. `line` é opcional em cada evidência. Campos textuais ocupam uma linha. Categorias: `problema`, `risco`, `melhoria sugerida`; estados: `observado`, `hipótese`, `confirmado`, `aguardando avaliação`, `resolvido`, `descartado`. Uma sugestão exige também `benefit` específico e `tradeoff`; `confirmado` exige `confirmation` com reprodução ou verificação realizada. Sem evidência, impacto ou justificativas exigidas, o resultado é `ignored` e nenhum registro é criado. Warnings transitórios, erros corrigidos e sugestões genéricas devem ser descartados pelo agente (`relevant: false`). A seleção semântica continua responsabilidade do agente; o comando não verifica a veracidade do relato.
+
+O par normalizado `component` + `problem` determina o ID estável `PEN-...`. Repita esses valores para atualizar o estado, reunir evidências e preservar tarefas de origem; repetir o mesmo registro resulta em `unchanged`. Antes de registrar, compare o significado das entradas existentes: a ferramenta não reconhece sinônimos. Atualize registros manuais ou migrados no lugar, preservando o ID, sem criar cópia pelo comando. Preserve os marcadores dos blocos administrados.
+
+Com `persistent: true`, a descrição e as evidências ficam somente na memória de problemas, em `PROB-...`; a pendência mantém referência, estado, categoria, ação e origem. Uma entrada promovida continua na memória nas atualizações seguintes. A memória é escrita antes da referência; em falha parcial, repetir o comando recompõe a referência sem duplicar o problema. Arquivos personalizados são preservados, arquivos rastreados e links são recusados, e um projeto Git precisa da proteção local preparada pela migração. Em `off` não há gravação. O comando apenas registra descobertas, sem aplicar sugestões ou editar a aplicação.
+
 A memória Markdown local, ignorada pelo Git, preserva conhecimento entre sessões, independentemente de linguagem ou plataforma:
 
 | Documento                                  | Critério                                                                                                                                                                                                       |

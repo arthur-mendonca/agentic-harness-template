@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 from harness.config import discover_root, load_config, read_json
+from harness.findings import FindingStore
 from harness.migration import require_tasks_ready
 from harness.sdd_policy import MODES, choose_mode, parse_risks
 from harness.specs import KINDS
@@ -26,6 +27,9 @@ def main(argv=None):
     new.add_argument("--mode", choices=MODES)
     new.add_argument("--title", required=True)
     _risk_arguments(new)
+    finding = commands.add_parser("finding", help="Record an agent-selected out-of-scope finding")
+    finding.add_argument("--input", type=Path, required=True, help="JSON finding with evidence and future action")
+    finding.add_argument("--mode", choices=("off", "lite", "full"))
     listing = commands.add_parser("list", help="List managed tasks")
     status = commands.add_parser("status", help="Read task metadata")
     status.add_argument("id")
@@ -50,7 +54,7 @@ def main(argv=None):
     for command in (validate, tracing, verify, allocate, awaiting, approve):
         command.add_argument("id")
     allocate.add_argument("kind", choices=KINDS)
-    for command in (new, listing, status, resume, mode, change, validate, tracing, verify, allocate, awaiting, approve):
+    for command in (new, finding, listing, status, resume, mode, change, validate, tracing, verify, allocate, awaiting, approve):
         command.add_argument("--project", default=argparse.SUPPRESS, help="Exact project root")
     args = parser.parse_args(argv)
     try:
@@ -67,10 +71,19 @@ def main(argv=None):
 
 
 def _dispatch(args):
+    if args.command == "finding" and args.mode == "off":
+        return {"status": "ignored", "reason": "Mode off keeps findings in the conversation"}
     if args.command == "new" and args.mode == "off":
         mode, reason = choose_mode("auto", args.mode, parse_risks(args.risk), assessed_low=args.assessed_low)
         return {"mode": mode, "mode_reason": reason, "path": None}
     root = discover_root(args.project)
+    if args.command == "finding":
+        config = load_config(root)
+        mode = args.mode or config.get("sdd", {}).get("mode", "auto")
+        if mode == "off":
+            return FindingStore(root).record(None, mode=mode)
+        require_tasks_ready(root, config)
+        return FindingStore(root).record(read_json(args.input), mode=mode)
     store = TaskStore(root)
     if args.command in ("new", "mode"):
         config = load_config(root)

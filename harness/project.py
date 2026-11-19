@@ -24,8 +24,9 @@ Acrescente somente restrições estáveis.
     ".harness/pendencias.md": """# Pendências
 
 Registre somente ação futura concreta que continue necessária após a tarefa e cuja omissão comprometa desenvolvimento, entrega ou decisão relevante, sem duplicar outro documento.
-Formato: identificador; ação; motivo ou impedimento; condição de conclusão, se aplicável; referência ao problema conhecido, quando pertinente.
-Não registrar debugging, testes bem-sucedidos, falhas transitórias ou verificações rotineiras não executadas sem obrigação futura. Problemas são descritos em `.harness/memoria/problemas-conhecidos.md`; use apenas referência ao identificador.
+Formato: ID; categoria (problema, risco, melhoria sugerida); estado (observado, hipótese, confirmado, aguardando avaliação, resolvido, descartado); descrição objetiva; evidência (arquivo/função/teste); impacto; ação proposta; tarefa de origem. Sugestões exigem benefício específico e trade-off. Confirmação exige relato de reprodução ou verificação; observação de código não confirma requisito de negócio.
+Para registros selecionados pelo agente, use `python -m harness sdd finding --input CAMINHO`. Mantenha component e problem estáveis ao repetir a descoberta; reutilize a identidade existente após comparar componente, problema e evidências pelo significado. O comando atualiza o estado e reúne evidências e origens sem criar nova entrada. Preserve os marcadores dos blocos administrados.
+Não registrar debugging, testes bem-sucedidos, falhas transitórias, erros já corrigidos ou verificações rotineiras não executadas sem obrigação futura. Problemas persistentes são descritos em `.harness/memoria/problemas-conhecidos.md`; use apenas referência ao identificador, estado, categoria, ação e origem. Não aplique sugestões nem corrija problemas fora do escopo.
 Ao concluir, atualize ou remova conforme relevância histórica; não acumule encerradas sem justificativa.
 """,
     ".harness/memoria/regras-negocio.md": """# Regras de negócio

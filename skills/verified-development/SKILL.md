@@ -1,7 +1,7 @@
 ---
 name: verified-development
 metadata:
-  version: "0.7.0"
+  version: "0.8.0"
 description: Coordena migração de controles, investigação, TDD, verificações automatizadas, revisão independente, convergence e homologação HTTP quando aplicável. Use ao receber uma funcionalidade ou correção que precisa de evidências verificáveis.
 ---
 
@@ -49,7 +49,13 @@ description: Coordena migração de controles, investigação, TDD, verificaçõ
 
 8. Em trabalho gerenciado, após as verificações, avalie: A ausência deste registro prejudicaria uma implementação, investigação, entrega ou decisão futura? Se não, não registre. A avaliação não obriga a editar arquivos. Siga os critérios dos documentos gerados: regras confirmadas ou aprovadas em `.harness/memoria/regras-negocio.md`; problemas persistentes e atualizações de status em `.harness/memoria/problemas-conhecidos.md`; decisões não evidentes, com impacto futuro e risco de retrabalho ou regressão se ausentes, em `.harness/memoria/decisoes.md`. Atualize sem duplicações, distinguindo fatos, decisões aprovadas e questões abertas. Não altere comportamento esperado sem autorização nem corrija problemas fora do escopo.
 
-9. Em trabalho gerenciado, registre em `.harness/pendencias.md` somente ações futuras concretas e relevantes. Referencie problemas por identificador e atualize ações concluídas conforme relevância histórica. Em `off`, relate achados e pendências na conversa. Preserve JSON e logs em `.harness/results/`. Apresente resultados, comandos, limitações e verificações impedidas na conversa.
+9. Em trabalho gerenciado, registre automaticamente descobertas fora do escopo somente quando justificarem discussão ou ação futura concreta. Não implemente a sugestão nem corrija o problema alheio ao pedido. Descarte warnings efêmeros, logs, erros já corrigidos, elogios e sugestões genéricas como “melhorar escalabilidade/organização”. Se nada relevante surgir, não escreva entrada nem inclua uma seção vazia na resposta. Selecione poucas sugestões pelo impacto; no máximo três por tarefa, salvo pedido explícito.
+
+   - Leia `.harness/pendencias.md` e a memória pertinente antes de registrar. Compare componente, problema e evidências pelo significado. Reutilize os valores `component` e `problem` existentes mesmo que a descrição tenha mudado. A identidade representa um problema específico no componente, não uma tarefa ou cada execução de teste; evidências e origens adicionais pertencem à mesma entrada. Registros manuais ou migrados sem marcadores devem ser atualizados no lugar, preservando seu identificador; não crie um segundo registro pelo CLI.
+   - Prepare um objeto JSON com `relevant: true`, `component`, `problem` (chave estável), `category` (`problema`, `risco`, `melhoria sugerida`), `state` (`observado`, `hipótese`, `confirmado`, `aguardando avaliação`, `resolvido`, `descartado`), `description`, `evidence`, `impact`, `action`, `origin` (ID/caminho da tarefa) e `persistent` (booleano). Cada evidência contém `file` relativo ao projeto, `detail` com função, teste ou observação concreta e, opcionalmente, `line`. Mantenha campos textuais em uma linha. Para sugestões, acrescente `benefit` específico e `tradeoff`; para `confirmado`, forneça `confirmation` com a reprodução ou verificação efetivamente realizada. Custo possível sem medição continua hipótese; inspeção de código não constitui regra de negócio.
+   - Use `python -m harness sdd finding --input CAMINHO --mode lite|full` com a modalidade vigente. O Python valida referências e campos, reúne evidências/origens e atualiza o mesmo ID; não avalia relevância semântica nem comprova a afirmação do agente. `ignored` indica que nada foi registrado: confira o motivo, sem inventar evidência para superar o filtro. JSON temporário de entrada não é um novo documento obrigatório da tarefa; remova-o quando não for mais necessário.
+   - Use `persistent: true` para problemas duradouros que afetem tarefas futuras: o conteúdo completo fica em `.harness/memoria/problemas-conhecidos.md`, com ID `PROB-...`. Em `.harness/pendencias.md` ficam referência, estado, categoria, ação e origem, sem repetir descrição ou evidências. Ao resolver ou descartar, atualize a identidade existente. Uma falha entre a escrita da memória e da referência pode ser recuperada repetindo o mesmo comando. Não copie o problema para regras de negócio.
+   - Em `off`, relate achados e pendências na conversa, sem gerar arquivos de gestão. Preserve JSON e logs dos checks em `.harness/results/`. Apresente resultados, comandos, limitações e verificações impedidas na conversa.
 
 ## Limites e restrições
 

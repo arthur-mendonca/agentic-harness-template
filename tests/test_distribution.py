@@ -71,6 +71,7 @@ with contextlib.redirect_stdout(io.StringIO()) as help_output:
 assert "python -m harness update" in help_output.getvalue()
 from harness.installer import init_project
 from harness.runner import run
+from harness.findings import FindingStore
 assert Path(harness.__file__).is_relative_to(Path(sys.argv[1]))
 assert importlib.metadata.version("agentic-verifiable-harness") == harness.__version__
 entries = importlib.metadata.distribution("agentic-verifiable-harness").entry_points
@@ -79,6 +80,14 @@ for entry in entries:
     assert callable(entry.load())
 project = Path(sys.argv[2])
 assert init_project(project)["valid"]
+(project / "maps.py").write_text("def distance(): return api(), api(), api()\\n", encoding="utf-8")
+finding = {"relevant": True, "component": "maps.distance", "problem": "repeated-api-calls",
+           "category": "risco", "state": "hipótese", "description": "Three API calls.",
+           "evidence": [{"file": "maps.py", "line": 1, "detail": "Three calls in distance()."}],
+           "impact": "Potential request cost; not measured.", "action": "Discuss request consolidation.",
+           "origin": "wheel-smoke", "persistent": True}
+assert FindingStore(project).record(finding)["status"] == "created"
+assert FindingStore(project).record(finding)["status"] == "unchanged"
 with contextlib.redirect_stdout(io.StringIO()):
     assert main(["--validate", "--project", str(project)]) == 0
     assert main(["update", "--project", str(project)]) == 0
@@ -125,10 +134,19 @@ sys.path.insert(0, sys.argv[1])
 from harness.installer import init_project
 from harness.project_update import update_project
 from harness.runner import main, run
+from harness.findings import FindingStore
 project = Path(sys.argv[2])
 assert not (Path(sys.argv[1]) / "skills").exists()
 assert not (Path(sys.argv[1]) / "templates").exists()
 assert init_project(project)["valid"]
+(project / "maps.py").write_text("def distance(): return api(), api(), api()\\n", encoding="utf-8")
+finding = {"relevant": True, "component": "maps.distance", "problem": "repeated-api-calls",
+           "category": "risco", "state": "hipótese", "description": "Three API calls.",
+           "evidence": [{"file": "maps.py", "detail": "Three calls in distance()."}],
+           "impact": "Potential request cost; not measured.", "action": "Discuss request consolidation.",
+           "origin": "copy-smoke"}
+assert FindingStore(project).record(finding)["status"] == "created"
+assert FindingStore(project).record(finding)["status"] == "unchanged"
 assert main(["--validate", "--project", str(project)]) == 0
 assert main(["update", "--project", str(project)]) == 0
 assert update_project(project)["updated"] == []

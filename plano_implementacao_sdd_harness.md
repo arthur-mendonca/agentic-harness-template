@@ -245,6 +245,8 @@ $sdd-off Corrija este texto sem criar documentos.
 
 ### ETAPA 7 — Pendências automáticas e sugestões de melhoria
 
+**Status** · Implementada e verificada com 166 testes no Windows com Python 3.14, incluindo instalação por wheel e execução por cópia. Revisão independente concluída sem findings P0–P2 pendentes. A seleção semântica e a veracidade dos achados continuam sob responsabilidade do agente.
+
 **Objetivo:** capturar oportunidades relevantes descobertas durante o trabalho, preservando o escopo.
 
 **Arquivos prováveis:** `harness/findings.py`, modelos em `harness/project.py`, integração na skill `verified-development`, testes `test_findings.py`.
@@ -253,13 +255,13 @@ $sdd-off Corrija este texto sem criar documentos.
 
 **Tarefas:**
 
-- [ ] Registrar automaticamente somente descobertas que justifiquem futura discussão ou ação; não registrar warning efêmero, logs, erros já corrigidos ou elogios genéricos à arquitetura.
-- [ ] Distinguir hipótese de problema reproduzido. Não converter observação de código em regra de negócio.
-- [ ] Deduplicar por identidade do componente, problema e evidência; atualizar status da entrada existente, não criar nova.
-- [ ] Permitir sugestões que tenham **evidência, benefício específico e trade-off**; proibir “melhorar escalabilidade/organização” sem contexto.
-- [ ] Não aplicar sugestões nem corrigir problema não solicitado; somente apontar para debate com a equipe.
-- [ ] Usar `memoria/problemas-conhecidos.md` para problemas persistentes que afetem tarefas futuras; em `pendencias.md`, manter apenas referência à entrada da memória, não copiar descrição integral.
-- [ ] Limitar sugestões por relevância e omitir a seção se nada útil surgir.
+- [x] Registrar automaticamente somente descobertas que justifiquem futura discussão ou ação; não registrar warning efêmero, logs, erros já corrigidos ou elogios genéricos à arquitetura.
+- [x] Distinguir hipótese de problema reproduzido. Não converter observação de código em regra de negócio.
+- [x] Deduplicar por identidade do componente, problema e evidência; atualizar status da entrada existente, não criar nova.
+- [x] Permitir sugestões que tenham **evidência, benefício específico e trade-off**; proibir “melhorar escalabilidade/organização” sem contexto.
+- [x] Não aplicar sugestões nem corrigir problema não solicitado; somente apontar para debate com a equipe.
+- [x] Usar `memoria/problemas-conhecidos.md` para problemas persistentes que afetem tarefas futuras; em `pendencias.md`, manter apenas referência à entrada da memória, não copiar descrição integral.
+- [x] Limitar sugestões por relevância e omitir a seção se nada útil surgir.
 
 **Critérios de aceitação:** o agente detecta um possível custo desnecessário fora do escopo, registra com status apropriado e mantém código intocado; execução repetida não gera duplicação; sugestões genéricas são descartadas.
 
