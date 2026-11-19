@@ -20,9 +20,33 @@ class InstallerTests(unittest.TestCase):
     def write_json(self, name, data):
         (self.root / name).write_text(json.dumps(data), encoding="utf-8")
 
+    def test_generated_agents_matches_requested_text_exactly(self):
+        expected = r"""# AGENTS.md — Regras permanentes
+
+- Para funcionalidades e bugs, use `$verified-development`, com `$code-investigation`, `$tdd-implementation`, `$review-agent` independente e `$http-homologation` quando aplicável.
+- Antes de editar: `git status --short`, inspeção dos diffs e investigação do código, testes e convenções. Preserve alterações anteriores e comportamento fora do escopo.
+- Antes da primeira tarefa gerenciada, siga a migração descrita em `$verified-development`. Consulte `IMPLEMENTATION_CONSTRAINTS.md`, quando existir.
+- Consulte seletivamente regras, decisões e problemas relevantes da memória; confronte-os com o código, investigue divergências e evite repetir investigações confiáveis.
+- Peça aprovação para alterações relevantes de arquitetura, contratos públicos, esquema de dados, dependências, segurança ou ações externas.
+- Reproduza bugs com testes quando viável; execute verificações pertinentes e confira regressões. Se houver `.harness/harness.json`, consulte `python -m harness.runner --list` e selecione apenas checks configurados via `--check NOME`. Lint e build não são obrigatórios.
+- Registre comandos, resultados e falhas. Faça revisão independente quando suportada; senão, informe a limitação. Não declare verificações sem evidências.
+- Não faça commits, push ou deploy nem versione `.harness/`. Sem autorização, não use `git add`, `git merge`, migrações, seeders ou scripts destrutivos; não altere serviços externos ou dados persistentes nem amplie o escopo. Não use `git reset` ou `git clean` indiscriminadamente.
+- Não crie documentação, automações ou arquivos auxiliares desnecessários.
+- Após verificar, registre memória e `.harness/pendencias.md` **somente se a omissão prejudicar trabalho futuro**. Atualize sem duplicar e distinga fatos confirmados, decisões aprovadas e questões abertas.
+- Evidências detalhadas ficam em `.harness/results/`; comandos e resultados, no relatório final da sessão, sem cópia automática para Markdown.
+- Entregue um resumo na conversa com comportamento, verificações, revisão e limitações.
+- Comentários no código somente em PT-BR. Evitá-los a não ser que sejam essenciais para o entendimento do trecho de código.
+
+## Regras permanentes do projeto
+
+Acrescente somente restrições estáveis.
+"""
+        init_project(self.root)
+        self.assertEqual((self.root / "AGENTS.md").read_bytes(), expected.encode("utf-8"))
+
     def test_controls_are_centralized(self):
         init_project(self.root)
-        for name in ('harness.json', 'planos/instrucoes.md', 'memoria/decisoes.md'):
+        for name in ('harness.json', 'pendencias.md', 'memoria/decisoes.md'):
             self.assertTrue((self.root / '.harness' / name).is_file())
         self.assertFalse((self.root / 'planos').exists())
         self.assertFalse((self.root / 'memoria').exists())
@@ -33,8 +57,9 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(summary["valid"])
         self.assertFalse(summary["checks_executed"])
         self.assertTrue(all(c["state"] == "unconfigured" for c in config["checks"].values()))
-        for path in ("AGENTS.md", ".harness/harness.json", ".harness/planos/instrucoes.md", ".harness/planos/pendencias.md", ".harness/planos/relatorios.md", ".gitignore"):
+        for path in ("AGENTS.md", ".harness/harness.json", ".harness/pendencias.md", ".gitignore"):
             self.assertTrue((self.root / path).is_file())
+        self.assertFalse((self.root / ".harness/planos").exists())
         self.assertTrue((self.root / ".harness/results").is_dir())
         self.assertFalse((self.root / ".harness/http").exists())
         self.assertFalse((self.root / "tarefas").exists())
@@ -112,7 +137,7 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse((self.root / ".harness/planos").exists())
 
     def test_control_file_path_conflict_causes_no_partial_install(self):
-        (self.root / ".harness/planos/relatorios.md").mkdir(parents=True)
+        (self.root / ".harness/pendencias.md").mkdir(parents=True)
         with self.assertRaises(ConfigError):
             init_project(self.root)
         self.assertFalse((self.root / "harness.json").exists())
@@ -126,7 +151,7 @@ class InstallerTests(unittest.TestCase):
 
     def test_conflicting_file_in_directory_position_causes_no_partial_install(self):
         (self.root / ".harness").mkdir()
-        (self.root / ".harness/planos").write_text("important file", encoding="utf-8")
+        (self.root / ".harness/memoria").write_text("important file", encoding="utf-8")
         with self.assertRaises(ConfigError):
             init_project(self.root)
         self.assertFalse((self.root / "harness.json").exists())
@@ -206,7 +231,7 @@ class InstallerTests(unittest.TestCase):
         outside = self.root / "outside"
         outside.mkdir()
         (project / ".harness").mkdir()
-        directory_link(project / ".harness/planos", outside)
+        directory_link(project / ".harness/memoria", outside)
         with self.assertRaises(ConfigError):
             init_project(project)
         self.assertEqual(list(outside.iterdir()), [])

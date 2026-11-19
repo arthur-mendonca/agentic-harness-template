@@ -29,19 +29,72 @@ Em instalações por pacote ou wheel, o comando reinstala a revisão atual do re
 
 A atualização do app atende os consumidores que usam essa instalação compartilhada. Ambientes virtuais independentes usam o mesmo comando com seu próprio Python. Skills globais continuam disponíveis pela [operação explícita de skills](#instalar-ou-atualizar-as-skills-globais); não fazem parte do pacote Python.
 
-### Atualizar o projeto local, incluindo AGENTS.md
+### Preparar e migrar os controles do projeto
 
 Na raiz do projeto consumidor, execute no CMD ou PowerShell:
 
 ```console
+python -m harness update --project . --dry-run
 python -m harness update --project .
 ```
 
-Esse comando aplica os controles da versão instalada ao `AGENTS.md` e aos documentos em `.harness/`, sem Git, rede ou reinstalação do app. Preserva os comandos dos checks, regras personalizadas, tarefas, registros e memória. Antes de substituir arquivos, salva os originais em `.harness/backups/update-<identificador>/` e informa esse caminho. A atualização não executa checks.
+O comando gera uma prévia em JSON com inventário, hashes e ações previstas. A migração leva a configuração para `.harness/harness.json` no schema 2 e preserva comandos, estados, diretórios e timeouts dos checks. O executor aceita schemas 1 e 2. Se as configurações da raiz e de `.harness/` divergirem para o mesmo check, o JSON indica o conflito e mantém os dois arquivos para resolução. Para um legado sem configuração, o comando usa a mesma detecção de checks do instalador. A migração mantém as evidências em `.harness/results/` e grava backups verificados em `.harness/backups/migration-<identificador>/` antes de substituir ou arquivar fontes.
 
-As instruções geradas ficam delimitadas por comentários `harness:managed`; conteúdo personalizado fica fora desse bloco. Na primeira atualização de arquivos antigos sem marcadores, somente linhas exatamente iguais às instruções padrão conhecidas são substituídas; textos diferentes são mantidos como personalizações. Atualizações seguintes usam o modelo anterior registrado em `.harness/template-state.json`, preservando também regras adicionadas dentro do bloco. Repetir o comando sem mudanças não duplica conteúdo nem cria backups adicionais. Em layouts antigos, documentos padrão de `planos/`, `memoria/` e a configuração da raiz são incorporados em `.harness/`, mantendo os originais. Arquivos personalizados adicionais permanecem no legado, e o `AGENTS.md` orienta sua consulta quando não há arquivo canônico correspondente.
+Em projetos Git, a migração lista controles rastreados e os preserva. Se `AGENTS.md` estiver rastreado, a skill também consulta `.harness/AGENTS.md`. A proteção de arquivos locais usa regras existentes, `.git/info/exclude` quando estiver na raiz do projeto ou um `.gitignore` não rastreado no subprojeto. As regras adicionadas podem permanecer após uma falha para proteger os backups. Projetos sem Git podem migrar normalmente. A operação usa arquivos locais e mantém a atualização do app e a execução de checks separadas.
 
-O princípio de manutenção é: operações rotineiras do app devem ser automatizadas em um único comando. Os procedimentos de SHA e wheel abaixo são opções de distribuição controlada.
+A skill `verified-development` executa a migração antes da primeira tarefa gerenciada. Quando a prévia indicar `review_required`, o agente lê as fontes, deduplica o conteúdo relevante e prepara um JSON temporário com os achados e as referências às linhas. Exemplo para um relatório legado:
+
+```json
+{
+  "destinations": {
+    ".harness/memoria/decisoes.md": null,
+    ".harness/memoria/problemas-conhecidos.md": null,
+    ".harness/memoria/regras-negocio.md": null,
+    ".harness/pendencias.md": null,
+    ".harness/tarefas/000-contexto-legado/contexto.md": null,
+    "memoria/decisoes.md": null,
+    "memoria/problemas-conhecidos.md": null,
+    "memoria/regras-negocio.md": null
+  },
+  "sources": {
+    "planos/relatorios.md": {
+      "sha256": "<hash exibido no campo inventory da prévia>",
+      "archive": true,
+      "findings": [
+        {"category": "rule", "text": "Limite de 300 entregas aprovado em REQ-8.", "line": 2}
+      ]
+    }
+  }
+}
+```
+
+Copie o objeto `destinations` integralmente da prévia. Os valores `null` do exemplo representam arquivos ausentes. As categorias aceitas são `rule`, `decision`, `problem`, `pending` e `task`. Uma lista `findings` vazia confirma que a fonte foi lida e não contém achados a consolidar. Use `archive: true` apenas para um relatório elegível em `archive_after_review` que possa sair do fluxo ativo. Use `archive: false` para preservar um relatório revisado. Se um `AGENTS.md` aparecer entre as fontes, inclua `instructions` com as regras personalizadas preservadas e referências canônicas.
+
+```console
+python -m harness update --project . --migration-review CAMINHO_DO_JSON --dry-run
+python -m harness update --project . --migration-review CAMINHO_DO_JSON
+```
+
+O comando confere os hashes das fontes e dos destinos antes de aplicar a revisão. Conserva relatórios rastreados e arquiva os selecionados depois da consolidação. `.harness/migration-state.json` guarda o estado e permite retomar progresso parcial. Repetir o comando sem novidades preserva os arquivos e os backups existentes. A aplicação retorna código 3 enquanto houver revisão pendente ou conflito indicado no JSON.
+
+### Modos e tarefas SDD
+
+Em `.harness/harness.json` (schema 2), use `"sdd": {"mode": "auto"}` para configurar o padrão. As opções são `auto`, `lite`, `full` e `off`. O parâmetro `--mode` prevalece para uma nova tarefa. O modo efetivo `lite` cria `meta.json` e `tarefa.md`. O modo `full` cria `meta.json`, `spec.md`, `plan.md` e `tasks.md`. Um novo trabalho em `off` segue sem arquivos de tarefa.
+
+```console
+python -m harness sdd new --title "Ajustar rótulo" --assessed-low
+python -m harness sdd new --mode auto --title "Rever integração" --risk service_cost=material
+python -m harness sdd list
+python -m harness sdd status 001
+python -m harness sdd resume 001
+python -m harness sdd mode 001 full
+```
+
+Em `auto`, cada dimensão aceita `none`, `low`, `material` ou `unknown` no formato `--risk FATOR=NÍVEL`. Os fatores são `behavior`, `feature`, `contract`, `data`, `security`, `service_cost`, `volume`, `complexity`, `architecture`, `reversibility` e `test_scope`. Use `--assessed-low` depois de avaliar como baixas as dimensões omitidas. Impacto material ou avaliação incompleta leva a `full`.
+
+Cada tarefa fica em `.harness/tarefas/<número>-<slug>/` e aceita consulta e retomada pelo número ou ID completo. O contador local preserva a numeração após a remoção de pastas de tarefas. A promoção mantém o ID, o estado e as evidências. Reduzir para `lite` arquiva o trio e vincula o backup à tarefa. Uma nova promoção restaura o trio e incorpora anotações da versão lite. Selecionar `off` para uma tarefa existente suspende a gestão e preserva seus documentos.
+
+`set-status` aceita `open`, `in_progress`, `blocked`, `verified` e `completed`. Para `verified`, use `--evidence .harness/results/ARQUIVO.json` com checks selecionados e aprovados ou `--manual-evidence CAMINHO_RELATIVO` para um registro existente de verificação manual. O gerenciador registra as evidências informadas. A avaliação dos critérios de aceite pertence ao fluxo de verificação da tarefa.
 
 ## Instalação principal: pacote Python compartilhado
 
@@ -96,7 +149,7 @@ Set-Location -LiteralPath $projeto
 python -m harness.installer init .
 ```
 
-Não copie o `harness.json` desta fonte: ele contém os checks do próprio harness. O comando `init` gera a configuração do seu projeto e os controles `AGENTS.md`, `.harness/planos/instrucoes.md`, `.harness/planos/pendencias.md` e `.harness/planos/relatorios.md`, preservando arquivos existentes.
+O comando `init` gera a configuração do projeto, `AGENTS.md`, `.harness/pendencias.md` e os documentos de memória, preservando arquivos existentes. O `harness.json` desta fonte contém os checks do próprio harness.
 
 Confira a configuração e ajuste em `.harness/harness.json` os checks que permanecerem pendentes:
 
@@ -135,10 +188,7 @@ O comando `init` gera os controles diretamente no repositório informado:
 AGENTS.md
 .harness/
   harness.json
-  planos/
-  instrucoes.md
   pendencias.md
-  relatorios.md
   memoria/
   regras-negocio.md
   problemas-conhecidos.md
@@ -146,7 +196,7 @@ AGENTS.md
   results/
 ```
 
-`.harness/planos/instrucoes.md` concentra a tarefa atual e substitui o antigo `planos/novo-mapa.md`. `.harness/planos/pendencias.md` contém somente ações futuras concretas ainda necessárias e relevantes; ao concluir, atualize ou remova conforme relevância histórica. `.harness/planos/relatorios.md` resume entregas relevantes com data, identificação, comportamento e impactos. Diagnósticos intermediários, testes rotineiros e tarefas sem entrega relevante não exigem entradas.
+`.harness/pendencias.md` contém ações futuras concretas e relevantes. Ao concluir, atualize ou remova a entrada conforme a relevância histórica.
 
 A memória Markdown local, ignorada pelo Git, preserva conhecimento entre sessões, independentemente de linguagem ou plataforma:
 
@@ -160,7 +210,7 @@ Antes de implementar, consulte somente categorias e seções pertinentes. Regist
 
 Comandos, logs e resultados detalhados continuam em `.harness/results/`, ignorado pelo Git. O relatório final da sessão informa alterações, resultados efetivos, limitações e testes impedidos mesmo sem entrada permanente. Essas políticas orientam o Codex por instruções: o instalador não extrai conhecimento, não verifica a veracidade dos registros nem garante o julgamento do agente. Testes de conteúdo verificam as instruções distribuídas, não sua obediência em sessões futuras.
 
-Para consumidores existentes, a instalação editável permite atualizar o executor uma vez no computador e compartilhá-lo entre projetos. `harness_version` é informativo e pode permanecer no valor gravado originalmente; `schema_version` continua controlando a compatibilidade do formato. `init CAMINHO` cria documentos ausentes e `differences` mostra propostas para documentos existentes, que devem ser revisadas e incorporadas manualmente quando desejado, preservando personalizações e histórico. Projetos existentes mantêm sua configuração antiga ativa e seus documentos originais intactos. Para migrar, transfira manualmente todo o conteúdo de `planos/` e `memoria/` e o `harness.json` da raiz para `.harness/`, resolvendo conflitos e atualizando as referências em `AGENTS.md`. O instalador não cria documentos paralelos quando encontra os diretórios antigos. Se as duas configurações existirem, a configuração em `.harness/` tem precedência. As skills globais são arquivos separados do executável: atualize-as quando necessário pela operação `skills --update`, examinando backups e conflitos.
+Para consumidores existentes, a instalação editável permite atualizar o executor uma vez no computador e compartilhá-lo entre projetos. `init CAMINHO` cria documentos ausentes e o resumo mostra propostas em `differences` para documentos existentes. A migração é feita pelo comando `update --project`. As skills globais são atualizadas pela operação `skills --update`, que informa backups e conflitos.
 
 `.gitignore` recebe `.harness/` sem apagar suas regras. Arquivos existentes são preservados; o resumo JSON mostra diferenças entre os conteúdos existentes e propostos. Arquivos do formato anterior, quando encontrados, permanecem intactos e são listados em `legacy_files` para consolidação manual. Configuração incompatível ou conflitos de caminho interrompem a operação antes da criação dos arquivos. Repetir a instalação preserva a configuração e os controles. A validação inicial não executa checks nem instala dependências. Não são criadas pastas `tarefas/` ou `templates/`, relatórios de execução fictícios, `.harness/http/` ou `.harness/baseline-sequence/`.
 

@@ -127,6 +127,10 @@ def run(project=None, checks=None):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "sdd":
+        from harness.sdd_cli import main as sdd
+
+        return sdd(argv[1:])
     if argv and argv[0] == "update":
         # A running Windows console launcher can lock harness.exe while pip
         # replaces it. The module invocation keeps the executable unlocked.
@@ -136,7 +140,7 @@ def main(argv=None):
         from harness.updater import main as update
 
         return update(argv[1:])
-    parser = argparse.ArgumentParser(description=__doc__, epilog="Atualizar o app: python -m harness update")
+    parser = argparse.ArgumentParser(description=__doc__, epilog="Operações adicionais em python -m harness update e python -m harness sdd")
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--project", help="Exact project root; otherwise discover upwards from cwd")
     mode = parser.add_mutually_exclusive_group()

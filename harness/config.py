@@ -1,9 +1,14 @@
-"""Strict schema v1 validation without a runtime schema dependency."""
+"""Validate project configuration, including the legacy layout schema."""
 
 import json
 import math
 from pathlib import Path
 import re
+
+from harness import __version__
+from harness.sdd_policy import MODES
+
+SCHEMA_VERSION = 2
 
 
 class ConfigError(ValueError):
@@ -57,14 +62,18 @@ def _text(value):
 
 def validate_config(data, root):
     required = {"schema_version", "harness_version", "project", "checks"}
-    if not isinstance(data, dict) or set(data) != required:
-        raise ConfigError(f"Configuration must contain exactly: {sorted(required)}")
-    if type(data["schema_version"]) is not int or data["schema_version"] != 1:
-        raise ConfigError("Unsupported schema_version; expected integer 1")
+    if not isinstance(data, dict) or not required <= data.keys() or data.keys() - required - {"sdd"}:
+        raise ConfigError(f"Configuration requires {sorted(required)} and accepts optional sdd")
+    if type(data["schema_version"]) is not int or data["schema_version"] not in (1, SCHEMA_VERSION):
+        raise ConfigError(f"Unsupported schema_version; expected integer 1 or {SCHEMA_VERSION}")
     if not _text(data["harness_version"]):
         raise ConfigError("harness_version must be nonempty text")
     if not _text(data["project"]) or not isinstance(data["checks"], dict):
         raise ConfigError("project must be nonempty text and checks must be an object")
+    if "sdd" in data:
+        policy = data["sdd"]
+        if data["schema_version"] != SCHEMA_VERSION or not isinstance(policy, dict) or set(policy) != {"mode"} or policy["mode"] not in MODES:
+            raise ConfigError(f"Schema {SCHEMA_VERSION} sdd requires a mode from: {', '.join(MODES)}")
     for name, check in data["checks"].items():
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name):
             raise ConfigError(f"Invalid check name: {name!r}")
@@ -95,3 +104,15 @@ def validate_config(data, root):
 def load_config(root):
     name = ".harness/harness.json" if (root / ".harness/harness.json").exists() else "harness.json"
     return validate_config(read_json(contained_path(root, name)), root)
+
+
+def upgrade_config(data, root):
+    validate_config(data, root)
+    return {**data, "schema_version": SCHEMA_VERSION, "harness_version": __version__}
+
+
+def new_config(root, checks):
+    return validate_config({
+        "schema_version": SCHEMA_VERSION, "harness_version": __version__, "project": root.name, "checks": checks,
+        "sdd": {"mode": "auto"},
+    }, root)

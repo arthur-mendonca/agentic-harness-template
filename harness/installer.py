@@ -10,7 +10,7 @@ import tomllib
 import uuid
 
 from harness import __version__
-from harness.config import ConfigError, contained_path, load_config, read_json, validate_config
+from harness.config import ConfigError, contained_path, load_config, new_config, read_json
 from harness.project import PROJECT_FILES
 
 SKILLS = ("verified-development", "code-investigation", "tdd-implementation", "http-homologation")
@@ -115,16 +115,16 @@ def init_project(project):
     root = Path(project).expanduser().resolve()
     if not root.is_dir():
         raise ConfigError(f"Destination must be an existing directory: {root}")
-    _preflight(root, (*PROJECT_FILES, ".harness/harness.json", "harness.json", ".gitignore"), (".harness", ".harness/planos", ".harness/memoria", ".harness/results"))
+    _preflight(root, (*PROJECT_FILES, ".harness/harness.json", "harness.json", ".gitignore"), (".harness", ".harness/memoria", ".harness/results"))
     inspection, checks = inspect_project(root)
-    config = {"schema_version": 1, "harness_version": __version__, "project": root.name, "checks": checks}
-    validate_config(config, root)
+    config = new_config(root, checks)
     if (root / "harness.json").exists() or (root / ".harness/harness.json").exists():
         load_config(root)  # Fail before writing anything if the preserved config is incompatible.
     proposals = dict(PROJECT_FILES)
-    for directory in ("planos", "memoria"):
-        if (root / directory).exists() and not (root / ".harness" / directory).exists():
-            proposals = {name: text for name, text in proposals.items() if not name.startswith(f".harness/{directory}/")}
+    if (root / "memoria").exists() and not (root / ".harness/memoria").exists():
+        proposals = {name: text for name, text in proposals.items() if not name.startswith(".harness/memoria/")}
+    if any((root / name).exists() for name in ("planos", ".harness/planos", "tarefas/pendencias.md")):
+        proposals.pop(".harness/pendencias.md")
     if not (root / "harness.json").exists() or (root / ".harness/harness.json").exists():
         proposals[".harness/harness.json"] = json.dumps(config, ensure_ascii=False, indent=2) + "\n"
     summary = {"root": str(root), "created": [], "preserved": [], "updated": [], "differences": {},

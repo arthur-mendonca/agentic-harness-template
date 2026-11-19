@@ -39,6 +39,7 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             self.skipTest("Build a wheel in .harness/wheels/ to exercise installed-package isolation")
         self.assertEqual(len(wheels), 1, "Use one release wheel in .harness/wheels/ for an unambiguous installation")
         with zipfile.ZipFile(wheels[0]) as archive:
+            self.assertNotIn("harness/project_legacy.py", archive.namelist())
             self.assertFalse(any(name.endswith("SKILL.md") or name.startswith("harness_skills/") for name in archive.namelist()))
             self.assertFalse(any(name.startswith(("templates/", "harness_templates/")) for name in archive.namelist()))
             runtime = Path(__file__).resolve().parents[1] / "harness"
@@ -79,9 +80,13 @@ for entry in entries:
 project = Path(sys.argv[2])
 assert init_project(project)["valid"]
 with contextlib.redirect_stdout(io.StringIO()):
+    assert main(["--validate", "--project", str(project)]) == 0
     assert main(["update", "--project", str(project)]) == 0
+    assert main(["sdd", "--project", str(project), "new", "--mode", "lite", "--title", "Wheel SDD"]) == 0
 assert "<!-- harness:managed:start -->" in (project / "AGENTS.md").read_text(encoding="utf-8")
-assert {p.name for p in (project / ".harness/planos").iterdir()} == {"instrucoes.md", "pendencias.md", "relatorios.md"}
+assert {p.name for p in (project / ".harness/tarefas/001-wheel-sdd").iterdir()} == {"meta.json", "tarefa.md"}
+assert (project / ".harness/pendencias.md").is_file()
+assert not (project / ".harness/planos").exists()
 assert not (project / "tarefas").exists()
 assert {p.name for p in (project / ".harness/memoria").iterdir()} == {"regras-negocio.md", "problemas-conhecidos.md", "decisoes.md"}
 config = json.loads((project / ".harness/harness.json").read_text(encoding="utf-8"))
@@ -103,7 +108,8 @@ print(json.dumps({"installed_package": harness.__file__, "evidence": str(path), 
             root = Path(directory)
             source = Path(__file__).resolve().parents[1]
             runtime = root / "copied-runtime"
-            shutil.copytree(source / "harness", runtime / "harness", ignore=shutil.ignore_patterns("__pycache__"))
+            shutil.copytree(source / "harness", runtime / "harness",
+                            ignore=shutil.ignore_patterns("__pycache__", "project_legacy.py"))
             project = root / "consumer"
             project.mkdir()
             script = '''
@@ -112,12 +118,17 @@ from pathlib import Path
 import sys
 sys.path.insert(0, sys.argv[1])
 from harness.installer import init_project
-from harness.runner import run
+from harness.project_update import update_project
+from harness.runner import main, run
 project = Path(sys.argv[2])
 assert not (Path(sys.argv[1]) / "skills").exists()
 assert not (Path(sys.argv[1]) / "templates").exists()
 assert init_project(project)["valid"]
-assert {p.name for p in (project / ".harness/planos").iterdir()} == {"instrucoes.md", "pendencias.md", "relatorios.md"}
+assert main(["--validate", "--project", str(project)]) == 0
+assert main(["update", "--project", str(project)]) == 0
+assert update_project(project)["updated"] == []
+assert (project / ".harness/pendencias.md").is_file()
+assert not (project / ".harness/planos").exists()
 assert {p.name for p in (project / ".harness/memoria").iterdir()} == {"regras-negocio.md", "problemas-conhecidos.md", "decisoes.md"}
 config = json.loads((project / ".harness/harness.json").read_text(encoding="utf-8"))
 config["checks"] = {"copied": {"state": "configured", "command": [sys.executable, "-c", "print('copied-runtime-ok')"], "cwd": ".", "timeout": 5}}
