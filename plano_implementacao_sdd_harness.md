@@ -298,24 +298,26 @@ $sdd-off Corrija este texto sem criar documentos.
 
 ### ETAPA 9 — Limpeza do layout, documentação e testes de regressão
 
+**Status** · Implementação e verificação local realizadas: 172 testes aprovados no Windows com Python 3.14, incluindo wheel novo e cópia isolada com os quatro modos e migração legada. Revisão independente do diff e da minuta de entrega concluída sem findings P0–P2. A matriz Windows/Linux × Python 3.11–3.14 permanece parcialmente não verificada: as outras sete combinações exigem execução da CI. Somente Python 3.14 está disponível localmente; Docker sem daemon e WSL sem distribuição de desenvolvimento. A etapa não está integralmente validada enquanto essa pendência permanecer.
+
 **Objetivo:** eliminar conceitos duplicados do fluxo ativo sem perder conhecimento relevante nem quebrar instalações antigas.
 
 **Tarefas:**
 
-- [ ] Remover referências ativas à antiga pasta `planos/` e a `relatorios.md` das skills, templates, instalador, README e testes; manter lógica de **leitura/migração** para instalações antigas.
-- [ ] Preservar memória de regras, decisões e problemas, e `results/`; conferir que uma instalação limpa não gera documentos legados.
-- [ ] Atualizar o CLI e o README com modos, migração, backup, uso por skills, rastreabilidade e limites das verificações.
-- [ ] Explicar claramente o uso `$sdd-lite`/`$sdd-full` e a situação distinta de atalhos slash.
+- [x] Remover referências ativas à antiga pasta `planos/` e a `relatorios.md` das skills, templates, instalador, README e testes; manter lógica de **leitura/migração** para instalações antigas.
+- [x] Preservar memória de regras, decisões e problemas, e `results/`; conferir que uma instalação limpa não gera documentos legados.
+- [x] Atualizar o CLI e o README com modos, migração, backup, uso por skills, rastreabilidade e limites das verificações.
+- [x] Explicar claramente o uso `$sdd-lite`/`$sdd-full` e a situação distinta de atalhos slash.
 - [ ] Validar Python 3.11–3.14 e Windows/Linux, conforme matriz de CI existente.
-- [ ] Conferir instalação por pacote e por cópia, comportamento sem skills globais, atualização da instalação Python versus atualização do projeto, e preservação das skills antigas.
-- [ ] Inspecionar empacotamento para garantir que novas fontes/skills sejam distribuídas no fluxo apropriado, sem dependência de runtime adicional não autorizada.
-- [ ] Manter documentação do **próprio repositório da ferramenta** no Git, se desejado; o bloqueio de commit automático se refere aos artefatos gerados nos repositórios consumidores.
+- [x] Conferir instalação por pacote e por cópia, comportamento sem skills globais, atualização da instalação Python versus atualização do projeto, e preservação das skills antigas.
+- [x] Inspecionar empacotamento para garantir que novas fontes/skills sejam distribuídas no fluxo apropriado, sem dependência de runtime adicional não autorizada.
+- [x] Manter documentação do **próprio repositório da ferramenta** no Git, se desejado; o bloqueio de commit automático se refere aos artefatos gerados nos repositórios consumidores.
 
 **Critérios de aceitação:** `init` limpo cria somente o layout atual; `update --project` migra layouts antigos sem perda; exemplos do README correspondem aos comandos efetivamente implementados; os quatro fluxos operacionais funcionam em Windows e Linux.
 
-## 4. CLI proposta (não existente na revisão consultada)
+## 4. CLI implementada
 
-A interação normal deve ocorrer pelas **skills**. O CLI abaixo é infraestrutura auxiliar, com nomes sujeitos a testes de ergonomia; não implementá-lo como um segundo motor de agentes.
+A interação normal ocorre pelas **skills**. O CLI abaixo é infraestrutura auxiliar já implementada; não constitui um segundo motor de agentes. Consulte `python -m harness sdd --help` para a interface completa.
 
 ```bash
 # Preparação ou migração do projeto

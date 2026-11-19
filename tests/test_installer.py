@@ -46,10 +46,13 @@ Acrescente somente restrições estáveis.
 
     def test_controls_are_centralized(self):
         init_project(self.root)
-        for name in ('harness.json', 'pendencias.md', 'memoria/decisoes.md'):
-            self.assertTrue((self.root / '.harness' / name).is_file())
-        self.assertFalse((self.root / 'planos').exists())
-        self.assertFalse((self.root / 'memoria').exists())
+        files = {path.relative_to(self.root).as_posix() for path in self.root.rglob('*') if path.is_file()}
+        self.assertEqual(files, {
+            'AGENTS.md', '.gitignore', '.harness/harness.json', '.harness/pendencias.md',
+            '.harness/memoria/regras-negocio.md', '.harness/memoria/decisoes.md',
+            '.harness/memoria/problemas-conhecidos.md',
+        })
+        self.assertEqual(list((self.root / '.harness/results').iterdir()), [])
 
     def test_empty_repository_and_idempotence(self):
         summary = init_project(self.root)
@@ -64,8 +67,6 @@ Acrescente somente restrições estáveis.
         self.assertFalse((self.root / ".harness/http").exists())
         self.assertFalse((self.root / "tarefas").exists())
         self.assertFalse((self.root / "templates").exists())
-        self.assertFalse((self.root / "planos/novo-mapa.md").exists())
-        self.assertFalse((self.root / "planos/mapa.md").exists())
         self.assertFalse((self.root / "harness/runner.py").exists())
         before = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
         self.assertEqual(init_project(self.root)["created"], [])
@@ -136,12 +137,27 @@ Acrescente somente restrições estáveis.
         self.assertEqual(set(summary["legacy_files"]), {"planos", "tarefas/pendencias.md"})
         self.assertFalse((self.root / ".harness/planos").exists())
 
+    def test_local_legacy_controls_are_inventoried_without_competing_pending_document(self):
+        for index, name in enumerate(('.harness/planos/relatorios.md', '.harness/tarefas/pendencias.md',
+                                      'relatorios.md', '.harness/relatorios.md')):
+            with self.subTest(name=name):
+                project = self.root / str(index)
+                original = project / name
+                original.parent.mkdir(parents=True)
+                original.write_bytes(b'Confirmed finding to preserve.\r\n')
+                before = original.read_bytes()
+                result = init_project(project)
+                expected = '.harness/planos' if name.startswith('.harness/planos/') else name
+                self.assertIn(expected, result['legacy_files'])
+                self.assertEqual(original.read_bytes(), before)
+                self.assertFalse((project / '.harness/pendencias.md').exists())
+
     def test_control_file_path_conflict_causes_no_partial_install(self):
         (self.root / ".harness/pendencias.md").mkdir(parents=True)
         with self.assertRaises(ConfigError):
             init_project(self.root)
         self.assertFalse((self.root / "harness.json").exists())
-        self.assertFalse((self.root / "planos/instrucoes.md").exists())
+        self.assertFalse((self.root / "AGENTS.md").exists())
 
     def test_invalid_existing_config_causes_no_partial_install(self):
         (self.root / "harness.json").write_text("{}", encoding="utf-8")

@@ -6,6 +6,7 @@ import shutil
 import sys
 import unittest
 import zipfile
+from email.parser import BytesParser
 
 from tests.helpers import temporary_project
 
@@ -43,6 +44,11 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             self.assertFalse(any(name.endswith("SKILL.md") or name.startswith("harness_skills/") for name in archive.namelist()))
             self.assertFalse(any(name.startswith(("templates/", "harness_templates/")) for name in archive.namelist()))
             runtime = Path(__file__).resolve().parents[1] / "harness"
+            self.assertEqual({name for name in archive.namelist() if name.startswith('harness/')},
+                             {f'harness/{path.name}' for path in runtime.glob('*.py')})
+            metadata_name = next(name for name in archive.namelist() if name.endswith('.dist-info/METADATA'))
+            metadata = BytesParser().parsebytes(archive.read(metadata_name))
+            self.assertFalse(metadata.get_all('Requires-Dist'))
             for module in runtime.glob("*.py"):
                 self.assertEqual(archive.read(f"harness/{module.name}"), module.read_bytes(),
                                  f"Wheel contains a stale module: {module.name}")
@@ -113,6 +119,7 @@ assert not (Path(sys.argv[1]) / "harness_skills").exists()
 assert not (project / "skills").exists()
 print(json.dumps({"installed_package": harness.__file__, "evidence": str(path), "status": "passed"}))
 '''
+            script += '\n' + (Path(__file__).parent / 'fixtures/consumer_contract.py').read_text(encoding='utf-8')
             result = subprocess.run([sys.executable, "-I", "-c", script, str(site), str(project)], cwd=project, capture_output=True, text=True, encoding="utf-8", errors="replace")
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)["status"], "passed")
@@ -160,5 +167,6 @@ report, code, path = run(project, ["copied"])
 assert code == 0, report
 assert report["checks"]["copied"]["stdout"].strip() == "copied-runtime-ok"
 '''
-            result = subprocess.run([sys.executable, "-I", "-c", script, str(runtime), str(project)], cwd=project, capture_output=True, text=True)
+            script += '\n' + (Path(__file__).parent / 'fixtures/consumer_contract.py').read_text(encoding='utf-8')
+            result = subprocess.run([sys.executable, "-I", "-c", script, str(runtime), str(project)], cwd=project, capture_output=True, text=True, encoding='utf-8', errors='replace')
             self.assertEqual(result.returncode, 0, result.stderr)

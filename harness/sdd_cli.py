@@ -20,11 +20,14 @@ def _risk_arguments(parser):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="python -m harness sdd", description=__doc__)
+    parser = argparse.ArgumentParser(
+        prog="python -m harness sdd", description=__doc__,
+        epilog="auto selects lite or full; off creates no task documents. validate/trace check structure; verify records agent assessments and evidence, not proof of business behavior. Prepare legacy controls with python -m harness update --project PATH.",
+    )
     parser.add_argument("--project", help="Exact project root")
     commands = parser.add_subparsers(dest="command", required=True)
     new = commands.add_parser("new", help="Start work in the selected mode")
-    new.add_argument("--mode", choices=MODES)
+    new.add_argument("--mode", choices=MODES, help="Explicit mode overrides project policy; auto selects lite/full")
     new.add_argument("--title", required=True)
     _risk_arguments(new)
     finding = commands.add_parser("finding", help="Record an agent-selected out-of-scope finding")

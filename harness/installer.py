@@ -18,6 +18,8 @@ from harness.sdd_policy import MODES
 CORE_SKILLS = ("verified-development", "code-investigation", "tdd-implementation", "http-homologation")
 SDD_SKILLS = tuple(f"sdd-{mode}" for mode in MODES)
 CONVENTIONAL = ("prepare", "lint", "types", "test", "build")
+LEGACY_PENDING = ("planos", ".harness/planos", "tarefas/pendencias.md",
+                  ".harness/tarefas/pendencias.md", "relatorios.md", ".harness/relatorios.md")
 
 
 def _configured(command):
@@ -126,12 +128,12 @@ def init_project(project):
     proposals = dict(PROJECT_FILES)
     if (root / "memoria").exists() and not (root / ".harness/memoria").exists():
         proposals = {name: text for name, text in proposals.items() if not name.startswith(".harness/memoria/")}
-    if any((root / name).exists() for name in ("planos", ".harness/planos", "tarefas/pendencias.md")):
+    if any((root / name).exists() for name in LEGACY_PENDING):
         proposals.pop(".harness/pendencias.md")
     if not (root / "harness.json").exists() or (root / ".harness/harness.json").exists():
         proposals[".harness/harness.json"] = json.dumps(config, ensure_ascii=False, indent=2) + "\n"
     summary = {"root": str(root), "created": [], "preserved": [], "updated": [], "differences": {},
-               "legacy_files": [name for name in ("harness.json", "planos", "memoria", "tarefas/pendencias.md") if (root / name).exists()],
+               "legacy_files": [name for name in ("harness.json", "memoria", *LEGACY_PENDING) if (root / name).exists()],
                "inspection": inspection, "configured": [], "pending": [], "valid": False, "checks_executed": False}
     # Read and compare all preserved files before mutating the destination.
     for name, text in proposals.items():
@@ -220,7 +222,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", action="version", version=__version__)
     subparsers = parser.add_subparsers(dest="operation", required=True)
-    init = subparsers.add_parser("init", help="Inspect and prepare an existing project directory")
+    init = subparsers.add_parser("init", help="Create missing local controls; preserve existing files",
+                                description="Create the current layout without running checks. Existing legacy controls are inventoried; migrate with python -m harness update --project PATH.")
     init.add_argument("project")
     skills = subparsers.add_parser("skills", help="Explicitly install the Agent Skills and SDD mode adapters")
     skills.add_argument("--source", help="Source skills directory; default: skills/ next to the source harness directory")

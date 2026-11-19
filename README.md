@@ -4,7 +4,7 @@ Esta é a fonte reutilizável do executor e do comando de preparação de projet
 
 ## Requisitos e estrutura
 
-Python 3.11–3.14, Windows e Linux. Sem dependências Python em tempo de execução. A construção do pacote utiliza setuptools; Git é necessário apenas para instalar diretamente do repositório. Ferramentas dos checks pertencem ao projeto consumidor e não são instaladas automaticamente.
+Python 3.11–3.14, Windows e Linux. Sem dependências Python em tempo de execução. A construção do pacote utiliza setuptools. Git é usado na instalação/atualização de repositório e na inspeção de proteção dos controles em projetos Git. Ferramentas dos checks pertencem ao projeto consumidor e não são instaladas automaticamente.
 
 - `harness/`: validação, execução e instalador centralizados. `harness/project.py` define os controles gerados diretamente no destino; não há pasta de templates.
 - `skills/`: skills de desenvolvimento e adaptadores SDD, distribuídos pela operação explícita de cópia para o Codex.
@@ -14,6 +14,8 @@ Python 3.11–3.14, Windows e Linux. Sem dependências Python em tempo de execu�
 - `pyproject.toml`: metadados, comandos e empacotamento do código Python. Não há recursos externos que exijam `MANIFEST.in`.
 
 O `.gitignore` desta fonte exclui `/.harness/` do versionamento, incluindo evidências, projetos temporários e wheels. Wheels são saídas de build opcionais, guardadas em `.harness/wheels/`, sem uma pasta `dist/` na raiz. `build/`, `*.egg-info/`, `__pycache__/` e `.harness/` são artefatos locais de construção/verificação, não componentes a copiar para um consumidor. O instalador continua cuidando da regra `.harness/` no `.gitignore` do projeto de destino, preservando suas regras existentes.
+
+README, skills, testes e o plano de implementação desta ferramenta podem ser versionados normalmente pelo mantenedor. O fluxo não faz staging, commit, push ou deploy automático; os controles gerados nos consumidores permanecem locais. Arquivos que já estejam rastreados exigem tratamento conservador: ignorar um caminho não o remove do índice, e a migração não faz essa remoção.
 
 ## Atualizar o app: um comando
 
@@ -88,9 +90,11 @@ $sdd-full Implemente a otimização de consultas ao Google Maps.
 $sdd-off Corrija este texto sem criar documentos.
 ```
 
+Use `$sdd-lite` e `$sdd-full` para invocar as skills pelo nome. Atalhos slash são um mecanismo distinto: o instalador copia `SKILL.md` e não registra comandos `/sdd-lite` ou `/sdd-full`. A existência de uma skill instalada não cria esses atalhos.
+
 Os adaptadores encaminham o modo escolhido ao `verified-development`. Em trabalho gerenciado, o coordenador prepara os controles legados antes de criar ou retomar a tarefa. Um pedido simples de correção sem escolha de modo segue a política do projeto.
 
-Em `.harness/harness.json` (schema 2), use `"sdd": {"mode": "auto"}` para configurar o padrão. As opções são `auto`, `lite`, `full` e `off`. O parâmetro `--mode` prevalece para uma nova tarefa. O modo efetivo `lite` cria `meta.json` e `tarefa.md`. O modo `full` cria `meta.json`, `spec.md`, `plan.md` e `tasks.md`. Um novo trabalho em `off` segue sem arquivos de tarefa.
+Em `.harness/harness.json` (schema 2), use `"sdd": {"mode": "auto"}` para configurar o padrão. As opções são `auto`, `lite`, `full` e `off`; `auto` seleciona entre `lite` e `full`, sem criar um quarto layout de execução. O parâmetro `--mode` prevalece para uma nova tarefa. O modo efetivo `lite` cria `meta.json` e `tarefa.md`. O modo `full` cria `meta.json`, `spec.md`, `plan.md` e `tasks.md`. Um novo trabalho em `off` segue sem arquivos de tarefa.
 
 ```console
 python -m harness sdd new --title "Ajustar rótulo" --assessed-low
@@ -271,11 +275,13 @@ AGENTS.md
   harness.json
   pendencias.md
   memoria/
-  regras-negocio.md
-  problemas-conhecidos.md
-  decisoes.md
+    regras-negocio.md
+    problemas-conhecidos.md
+    decisoes.md
   results/
 ```
+
+Essa é a base criada por `init`. Trabalhos gerenciados acrescentam `tarefas/<número>-<slug>/` com o documento lite ou o trio full e `meta.json`. A migração acrescenta `backups/`, `migration-state.json` e controles internos quando necessário. Um trabalho novo em `off` não exige esses documentos. O instalador não cria relatórios cumulativos; registros relevantes vão para memória, pendências ou a tarefa correspondente.
 
 `.harness/pendencias.md` contém ações futuras concretas e relevantes. Ao concluir, atualize ou remova a entrada conforme a relevância histórica.
 
@@ -317,7 +323,7 @@ Comandos, logs e resultados detalhados continuam em `.harness/results/`, ignorad
 
 Para consumidores existentes, a instalação editável permite atualizar o executor uma vez no computador e compartilhá-lo entre projetos. `init CAMINHO` cria documentos ausentes e o resumo mostra propostas em `differences` para documentos existentes. A migração é feita pelo comando `update --project`. As skills globais são atualizadas pela operação `skills --update`, que informa backups e conflitos.
 
-`.gitignore` recebe `.harness/` sem apagar suas regras. Arquivos existentes são preservados; o resumo JSON mostra diferenças entre os conteúdos existentes e propostos. Arquivos do formato anterior, quando encontrados, permanecem intactos e são listados em `legacy_files` para consolidação manual. Configuração incompatível ou conflitos de caminho interrompem a operação antes da criação dos arquivos. Repetir a instalação preserva a configuração e os controles. A validação inicial não executa checks nem instala dependências. Não são criadas pastas `tarefas/` ou `templates/`, relatórios de execução fictícios, `.harness/http/` ou `.harness/baseline-sequence/`.
+`.gitignore` recebe `.harness/` sem apagar suas regras. Arquivos existentes são preservados; o resumo JSON mostra diferenças entre os conteúdos existentes e propostos. Arquivos do formato anterior permanecem intactos e são listados em `legacy_files`; siga `python -m harness update --project CAMINHO --dry-run` e a revisão semântica indicada na seção de migração. `init` não substitui essa transição. Configuração incompatível ou conflitos de caminho interrompem a operação antes da criação dos arquivos. Repetir a instalação preserva a configuração e os controles. A validação inicial não executa checks nem instala dependências. Não são criadas pastas de tarefas fora de `.harness/`, templates, relatórios de execução fictícios ou diretório de homologação HTTP sem necessidade.
 
 ## Instalar ou atualizar as skills globais
 
@@ -335,17 +341,18 @@ O destino padrão é `~/.agents/skills/` (por exemplo `C:\Users\User\.agents\ski
 
 Os adaptadores SDD usam o coordenador `verified-development` da mesma distribuição. Se a instalação listar um conflito nesse arquivo, resolva o conflito para usar o fluxo SDD deste checkout.
 
-As quatro skills `verified-development`, `code-investigation`, `tdd-implementation` e `http-homologation` foram copiadas das instalações acessíveis em `~/.agents/skills/` e adaptadas ao executor compartilhado. Todas identificam sua versão em `metadata.version`. Para revisão adversarial, o coordenador utiliza diretamente a skill nativa `review-agent` do Codex, que não é distribuída nem instalada por este pacote. Se a skill ou a execução independente não estiver disponível, a revisão deve ser registrada como não realizada. O coordenador exige investigação, testes e revisão em execução independente; HTTP só se aplica a interfaces afetadas. Commits e deploys dependem de autorização explícita do desenvolvedor.
+As quatro skills `verified-development`, `code-investigation`, `tdd-implementation` e `http-homologation` são preservadas e adaptadas ao executor compartilhado. Todas identificam sua versão em `metadata.version`. Para revisão adversarial, o coordenador usa a skill nativa `review-agent` do Codex quando disponível, ou outro revisor independente disponível. A skill nativa não é distribuída nem instalada por este pacote. Sem execução independente, registre a revisão como não realizada, respeitando a política de bloqueio ou dispensa do projeto. HTTP só se aplica a interfaces afetadas. Commits e deploys dependem de autorização explícita do desenvolvedor.
 
-## Configuração v1
+## Configuração atual e compatibilidade
 
-Exemplo de `.harness/harness.json` em `.harness/` do consumidor:
+Exemplo atual de `.harness/harness.json` do consumidor:
 
 ```json
 {
-  "schema_version": 1,
-  "harness_version": "0.3.0",
+  "schema_version": 2,
+  "harness_version": "0.3.1",
   "project": "meu-projeto",
+  "sdd": {"mode": "auto"},
   "checks": {
     "test": {
       "state": "configured",
@@ -367,7 +374,8 @@ Exemplo de `.harness/harness.json` em `.harness/` do consumidor:
 
 Contrato validado estritamente por `harness/config.py`:
 
-- As únicas chaves de raiz são as quatro do exemplo; `schema_version` é o inteiro `1` e `harness_version` é texto não vazio que registra a versão usada na criação. A validação não exige que corresponda à versão instalada. `project` é texto não vazio; `checks` é um objeto, sem nomes obrigatórios.
+- As chaves obrigatórias são `schema_version`, `harness_version`, `project` e `checks`. `schema_version` aceita os inteiros `1` e `2`; configurações v1 continuam executáveis e são evoluídas pela migração explícita do projeto. `harness_version` é texto não vazio que registra a versão usada na criação; não precisa corresponder à instalada. `project` é texto não vazio; `checks` é um objeto, sem nomes obrigatórios.
+- Somente no schema 2, a chave opcional `sdd` aceita exatamente `mode`, com `auto`, `lite`, `full` ou `off`. Sem política, o coordenador usa `auto`. Configurações novas já incluem essa política.
 - Nomes de checks seguem `[A-Za-z0-9][A-Za-z0-9_.-]*`. Não são aceitas chaves duplicadas no JSON nem campos desconhecidos.
 - `configured` exige exatamente `state`, `command` (lista de textos com executável não vazio; argumentos vazios são preservados e bytes NUL são proibidos), `cwd` (diretório existente, relativo à raiz) e `timeout` (segundos, número finito maior que zero, até 86400). Caminhos que saiam da raiz, inclusive por links, são rejeitados.
 - `unconfigured` e `not_applicable` exigem exatamente `state` e `reason` não vazio. Não aceitam comandos. Estados de resultado, como `passed`, não podem ser usados na configuração.
@@ -435,15 +443,17 @@ Para atualizar intencionalmente uma instalação fixada em SHA, selecione a nova
 python -m pip install --upgrade --force-reinstall "git+https://github.com/arthur-mendonca/agentic-harness-template.git@<NOVO_SHA_COMPLETO>"
 ```
 
-`--force-reinstall` permite trocar de revisão mesmo quando o número da versão do pacote permanece igual. Atualize também a revisão registrada em `requirements-harness.txt`, se utilizado. Para wheels, selecione e instale o novo arquivo explicitamente. Com uma instalação editável, atualizar o checkout atualiza o código Python usado pelo executável; mudanças em metadados, dependências ou comandos exigem repetir a instalação editável. Para conferir novos controles de um consumidor, execute `python -m harness.installer init CAMINHO_DO_PROJETO`: arquivos existentes são preservados e diferenças são informadas para revisão. A configuração do consumidor não precisa mudar quando `harness_version` mudar; valide com `harness --validate` e execute os checks relevantes, como `harness --check test`. Instale skills atualizadas somente pela operação `skills --update`, examinando conflitos e backups. Instalar/atualizar o pacote não modifica skills globais. Não use uma referência móvel como única fixação de versão em instalações de release. A versão deve ser incrementada quando o conteúdo distribuído mudar.
+`--force-reinstall` permite trocar de revisão mesmo quando o número da versão do pacote permanece igual. Atualize também a revisão registrada em `requirements-harness.txt`, se utilizado. Para wheels, selecione e instale o novo arquivo explicitamente. Com uma instalação editável, atualizar o checkout atualiza o código Python usado pelo executável; mudanças em metadados, dependências ou comandos exigem repetir a instalação editável. Para conferir a transição dos controles de um consumidor, execute `python -m harness update --project CAMINHO_DO_PROJETO --dry-run` e siga a migração com backup e revisão semântica; `init` apenas cria arquivos ausentes e informa diferenças. O campo `harness_version` pode diferir da instalação; valide com `harness --validate` e execute os checks relevantes, como `harness --check test`. Instale skills atualizadas somente pela operação `skills --update`, examinando conflitos e backups. Instalar/atualizar o pacote não modifica skills globais. Não use uma referência móvel como única fixação de versão em instalações de release. A versão deve ser incrementada quando o conteúdo distribuído mudar.
 
 ## Verificação do pacote
 
 ```console
-python -m unittest discover -s tests -v
 python -m pip wheel . --no-deps --wheel-dir .harness/wheels
-python -m unittest tests.test_distribution -v
-python -m harness.runner --check test
+python -B -m unittest discover -s tests -v
 ```
 
-O teste de distribuição instala o único wheel de `.harness/wheels/` em destino temporário e verifica geração dos controles, entry points, instalação de consumidor e execução sem skills, fora do checkout. Outro teste verifica a cópia somente de `harness/`, sem recursos externos. Sem wheel o teste de distribuição é marcado como não executado; a CI exige sua execução após o build. A presença da matriz Windows/Linux e Python 3.11–3.14 não comprova que ela já executou: veja os resultados da CI para limitações reais do ambiente.
+Use um único wheel atual em `.harness/wheels/`; `HARNESS_WHEEL_DIR` permite outro diretório e `HARNESS_TEST_WHEEL=1` torna sua ausência uma falha. A CI constrói o wheel antes de executar a suíte inteira nas oito combinações Windows/Linux e Python 3.11–3.14, com wheel obrigatório.
+
+O teste de distribuição verifica os módulos empacotados contra a fonte, a ausência de dependências de runtime e de skills/templates no wheel, entry points e execução fora do checkout com `-I`, sem skills globais. Wheel e cópia somente de `harness/` executam o mesmo cenário: layout limpo, `off`, `lite`, `full`, seleção `auto`, retomada, validate/trace/verify e conclusão com evidência, além de migração legada com backup, preservação de checks/memória/results e repetição sem alterações. Testes próprios cobrem a instalação explícita das oito skills e a preservação do conjunto antigo de quatro.
+
+Resultados locais ficam em `.harness/results/` quando a suíte é executada por `python -m harness.runner --check test`; confira a configuração antes de selecionar o check. Os testes determinísticos não comprovam comportamento semântico de negócio nem a obediência futura das skills. As avaliações independentes de explicação possuem seu próprio protocolo em `tests/fixtures/explanation/evaluate.md`. A presença da matriz de CI não comprova execução: consulte os resultados reais e reporte combinações não executadas.

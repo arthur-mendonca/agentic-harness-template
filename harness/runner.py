@@ -140,7 +140,7 @@ def main(argv=None):
         from harness.updater import main as update
 
         return update(argv[1:])
-    parser = argparse.ArgumentParser(description=__doc__, epilog="Operações adicionais em python -m harness update e python -m harness sdd")
+    parser = argparse.ArgumentParser(description=__doc__, epilog="SDD: python -m harness sdd --help. Controles locais e migração: python -m harness update --project CAMINHO. Atualizar somente o app: python -m harness update.")
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--project", help="Exact project root; otherwise discover upwards from cwd")
     mode = parser.add_mutually_exclusive_group()
