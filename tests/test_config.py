@@ -26,9 +26,21 @@ class ConfigurationTests(unittest.TestCase):
         self.write()
         self.assertEqual(load_config(self.root), self.data)
 
+    def test_sdd_policy_is_optional_in_schema_two_and_has_a_known_mode(self):
+        self.data["schema_version"] = 2
+        for mode in ("auto", "off", "lite", "full"):
+            with self.subTest(mode=mode):
+                self.data["sdd"] = {"mode": mode}
+                self.write()
+                self.assertEqual(load_config(self.root), self.data)
+        self.data["sdd"] = {"mode": "unknown"}
+        self.write()
+        with self.assertRaises(ConfigError):
+            load_config(self.root)
+
     def test_invalid_configurations(self):
         cases = [
-            {"schema_version": 2}, {"schema_version": True},
+            {"schema_version": 3}, {"schema_version": True},
             {"harness_version": ""}, {"project": ""},
             {"extra": True}, {"checks": []},
             {"checks": {"../escape": {"state": "unconfigured", "reason": "pending"}}},

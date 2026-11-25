@@ -10,11 +10,16 @@ import tomllib
 import uuid
 
 from harness import __version__
-from harness.config import ConfigError, contained_path, load_config, read_json, validate_config
+from harness.config import ConfigError, contained_path, load_config, new_config, read_json
 from harness.project import PROJECT_FILES
+from harness.project_storage import ProjectGit, atomic_write, local_path, writable_path
+from harness.sdd_policy import MODES
 
-SKILLS = ("verified-development", "code-investigation", "tdd-implementation", "http-homologation")
+CORE_SKILLS = ("verified-development", "code-investigation", "tdd-implementation", "http-homologation")
+SDD_SKILLS = tuple(f"sdd-{mode}" for mode in MODES)
 CONVENTIONAL = ("prepare", "lint", "types", "test", "build")
+LEGACY_PENDING = ("planos", ".harness/planos", "tarefas/pendencias.md",
+                  ".harness/tarefas/pendencias.md", "relatorios.md", ".harness/relatorios.md")
 
 
 def _configured(command):
@@ -99,11 +104,11 @@ def inspect_project(root):
 
 def _preflight(root, files, directories):
     for relative in directories:
-        path = contained_path(root, relative)
+        path = local_path(root, relative)
         if path.exists() and not path.is_dir():
             raise ConfigError(f"Expected a directory, preserved conflicting path: {path}")
     for relative in files:
-        path = contained_path(root, relative)
+        path = local_path(root, relative)
         if path.exists() and not path.is_file():
             raise ConfigError(f"Expected a file, preserved conflicting path: {path}")
         # Do not change a different file through an existing symlink.
@@ -115,20 +120,26 @@ def init_project(project):
     root = Path(project).expanduser().resolve()
     if not root.is_dir():
         raise ConfigError(f"Destination must be an existing directory: {root}")
-    _preflight(root, (*PROJECT_FILES, ".harness/harness.json", "harness.json", ".gitignore"), (".harness", ".harness/planos", ".harness/memoria", ".harness/results"))
+    _preflight(root, (*PROJECT_FILES, ".harness/harness.json", "harness.json", ".gitignore"), (".harness", ".harness/memoria", ".harness/results"))
+    git = ProjectGit(root)
     inspection, checks = inspect_project(root)
-    config = {"schema_version": 1, "harness_version": __version__, "project": root.name, "checks": checks}
-    validate_config(config, root)
+    config = new_config(root, checks)
     if (root / "harness.json").exists() or (root / ".harness/harness.json").exists():
         load_config(root)  # Fail before writing anything if the preserved config is incompatible.
     proposals = dict(PROJECT_FILES)
-    for directory in ("planos", "memoria"):
-        if (root / directory).exists() and not (root / ".harness" / directory).exists():
-            proposals = {name: text for name, text in proposals.items() if not name.startswith(f".harness/{directory}/")}
+    if git.tracks("AGENTS.md"):
+        if git.tracks(".harness/AGENTS.md"):
+            raise ConfigError("Tracked .harness/AGENTS.md prevents local harness instructions")
+        proposals[".harness/AGENTS.md"] = proposals.pop("AGENTS.md")
+    if (root / "memoria").exists() and not (root / ".harness/memoria").exists():
+        proposals = {name: text for name, text in proposals.items() if not name.startswith(".harness/memoria/")}
+    if any((root / name).exists() for name in LEGACY_PENDING):
+        proposals.pop(".harness/pendencias.md")
     if not (root / "harness.json").exists() or (root / ".harness/harness.json").exists():
         proposals[".harness/harness.json"] = json.dumps(config, ensure_ascii=False, indent=2) + "\n"
+    _preflight(root, proposals, ())
     summary = {"root": str(root), "created": [], "preserved": [], "updated": [], "differences": {},
-               "legacy_files": [name for name in ("harness.json", "planos", "memoria", "tarefas/pendencias.md") if (root / name).exists()],
+               "legacy_files": [name for name in ("harness.json", "memoria", *LEGACY_PENDING) if (root / name).exists()],
                "inspection": inspection, "configured": [], "pending": [], "valid": False, "checks_executed": False}
     # Read and compare all preserved files before mutating the destination.
     for name, text in proposals.items():
@@ -139,29 +150,83 @@ def init_project(project):
             if previous != text:
                 summary["differences"][name] = list(difflib.unified_diff(
                     previous.splitlines(), text.splitlines(), fromfile=f"existing/{name}", tofile=f"proposed/{name}", lineterm=""))
-    ignore = root / ".gitignore"
-    ignore_existed = ignore.exists()
-    previous_ignore = ignore.read_bytes() if ignore_existed else b""
-    patterns = [line.strip() for line in previous_ignore.decode("utf-8-sig").splitlines() if line.strip() and not line.lstrip().startswith("#")]
-    directories = {str(Path(name).parent).replace("\\", "/") for name in proposals if "/" in name}
-    for relative in sorted(directories | {".harness/results"}):
-        path = root / relative
-        if not path.exists():
-            path.mkdir(parents=True, exist_ok=True)
-            summary["created"].append(relative + "/")
-    for name, text in proposals.items():
-        path = root / name
-        if not path.exists():
-            with path.open("x", encoding="utf-8", newline="\n") as stream:
-                stream.write(text)
-            summary["created"].append(name)
-    if not patterns or patterns[-1] not in (".harness/", "/.harness/"):
-        with ignore.open("ab") as stream:
-            stream.write((b"\n" if previous_ignore and not previous_ignore.endswith(b"\n") else b"") + b".harness/\n")
-        summary["updated" if ignore_existed else "created"].append(".gitignore")
+    protected = {name for name in proposals if not git.tracks(name)} | {".harness/"}
+    if git.active:
+        exclusion, blocked = git.local_excludes(protected)
+        if blocked:
+            raise ConfigError("; ".join(sorted(set(blocked.values()))))
     else:
-        summary["preserved"].append(".gitignore")
-    final = load_config(root)
+        exclusion = (".gitignore", ["/AGENTS.md", ".harness/"])
+    ignore_name, previous_ignore, proposed_ignore = None, None, None
+    if exclusion:
+        ignore_name, rules = exclusion
+        _preflight(root, (ignore_name,), ())
+        ignore = local_path(root, ignore_name)
+        previous_ignore = ignore.read_bytes() if ignore.exists() else None
+        previous = previous_ignore or b""
+        suffix = ("\n".join(rules) + "\n").encode("utf-8")
+        if git.active or not previous.endswith(suffix):
+            proposed_ignore = previous + (b"\n" if previous and not previous.endswith(b"\n") else b"") + suffix
+        else:
+            summary["preserved"].append(ignore_name)
+    directories = {str(Path(name).parent).replace("\\", "/") for name in proposals if "/" in name}
+    directories |= {".harness", ".harness/results"}
+    missing = {name: text.encode("utf-8") for name, text in proposals.items() if not (root / name).exists()}
+    for name in missing:
+        if git.tracks(name):
+            raise ConfigError(f"Refusing to recreate missing tracked file: {name}")
+    pending_writes = [*missing, *(name for name in directories if not (root / name).exists())]
+    if proposed_ignore is not None:
+        pending_writes.append(ignore_name)
+    for name in pending_writes:
+        if not writable_path(root, name):
+            raise ConfigError(f"Installation cannot write {name}")
+    if git.active and git.index() != git.tracked:
+        raise ConfigError("Git index changed during installation preflight; retry")
+    if proposed_ignore is not None:
+        atomic_write(local_path(root, ignore_name), proposed_ignore)
+        summary["updated" if previous_ignore is not None else "created"].append(ignore_name)
+    try:
+        git.verify_ignored(protected | ({".gitignore"} if ignore_name == ".gitignore" and git.active else set()))
+    except (ConfigError, OSError):
+        if proposed_ignore is not None:
+            if previous_ignore is None:
+                local_path(root, ignore_name).unlink()
+            else:
+                atomic_write(local_path(root, ignore_name), previous_ignore)
+        raise
+    created_files, created_directories = [], []
+    try:
+        for relative in sorted(directories, key=lambda name: (len(Path(name).parts), name)):
+            path = local_path(root, relative)
+            if not path.exists():
+                path.mkdir()
+                created_directories.append(relative)
+                summary["created"].append(relative + "/")
+        for name, data in missing.items():
+            with local_path(root, name).open("xb") as stream:
+                created_files.append(name)
+                stream.write(data)
+            summary["created"].append(name)
+        final = load_config(root)
+        git.verify_ignored(protected)
+        if git.active and git.index() != git.tracked:
+            raise ConfigError("Git index changed during installation; retry")
+    except (OSError, ConfigError, KeyboardInterrupt) as exc:
+        failures = []
+        for name in reversed(created_files):
+            try:
+                local_path(root, name).unlink()
+            except (OSError, ConfigError):
+                failures.append(name)
+        for name in reversed(created_directories):
+            try:
+                local_path(root, name).rmdir()
+            except (OSError, ConfigError):
+                failures.append(name + "/")
+        if failures:
+            raise ConfigError(f"Installation could not roll back {', '.join(failures)}; local exclusions retained") from exc
+        raise
     summary["configured"] = [name for name, check in final["checks"].items() if check["state"] == "configured"]
     summary["pending"] = [name for name, check in final["checks"].items() if check["state"] == "unconfigured"]
     summary["valid"] = True
@@ -172,22 +237,24 @@ def install_skills(destination=None, update=False, source=None):
     root = Path(destination if destination is not None else Path.home() / ".agents" / "skills").expanduser().resolve()
     if root.exists() and not root.is_dir():
         raise ConfigError(f"Skills destination is not a directory: {root}")
-    _preflight(root, [f"{name}/SKILL.md" for name in SKILLS], SKILLS)
     source_root = Path(source if source is not None else Path(__file__).resolve().parent.parent / "skills").expanduser().resolve()
+    has_adapters = source is None or any((source_root / name).exists() or (source_root / name).is_symlink() for name in SDD_SKILLS)
+    names = (*CORE_SKILLS, *SDD_SKILLS) if has_adapters else CORE_SKILLS
+    _preflight(root, [f"{name}/SKILL.md" for name in names], names)
     # Skill files are read only by this explicit copy operation, never by init/run.
     sources = {}
-    for name in SKILLS:
+    for name in names:
         source_file = contained_path(source_root, f"{name}/SKILL.md")
         if not source_file.is_file():
             raise ConfigError(f"Skill source missing: {source_file}. Supply --source PATH_TO_SKILLS from the source checkout")
-        sources[name] = source_file.read_text(encoding="utf-8")
+        sources[name] = source_file.read_text(encoding="utf-8").encode("utf-8")
     summary = {"source": str(source_root), "destination": str(root), "version": __version__, "created": [], "preserved": [],
                "updated": [], "backups": [], "conflicts": []}
-    for name, text in sources.items():
+    for name, data in sources.items():
         target = root / name / "SKILL.md"
         if target.exists():
             previous = target.read_bytes()
-            if previous == text.encode("utf-8"):
+            if previous == data:
                 summary["preserved"].append(name)
                 continue
             if not update:
@@ -196,12 +263,14 @@ def install_skills(destination=None, update=False, source=None):
             backup = target.with_name(f"SKILL.md.backup-{uuid.uuid4().hex}")
             with backup.open("xb") as stream:
                 stream.write(previous)
+            atomic_write(target, data)
             summary["backups"].append(str(backup))
             summary["updated"].append(name)
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("xb") as stream:
+                stream.write(data)
             summary["created"].append(name)
-        target.write_text(text, encoding="utf-8", newline="\n")
     return summary
 
 
@@ -213,9 +282,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", action="version", version=__version__)
     subparsers = parser.add_subparsers(dest="operation", required=True)
-    init = subparsers.add_parser("init", help="Inspect and prepare an existing project directory")
+    init = subparsers.add_parser("init", help="Create missing local controls; preserve existing files",
+                                description="Create the current layout without running checks. Existing legacy controls are inventoried; migrate with python -m harness update --project PATH.")
     init.add_argument("project")
-    skills = subparsers.add_parser("skills", help="Explicitly install the four global Agent Skills")
+    skills = subparsers.add_parser("skills", help="Explicitly install the Agent Skills and SDD mode adapters")
     skills.add_argument("--source", help="Source skills directory; default: skills/ next to the source harness directory")
     skills.add_argument("--destination", help="Default: ~/.agents/skills/")
     skills.add_argument("--update", action="store_true", help="Replace differing SKILL.md files, preserving backups")

@@ -96,15 +96,21 @@ def update_app():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python -m harness update", description=__doc__)
-    parser.add_argument("--project", metavar="CAMINHO", help="Atualizar AGENTS.md e controles locais, sem reinstalar o app")
+    parser.add_argument("--project", metavar="CAMINHO", help="Preparar ou migrar os controles locais do projeto")
+    parser.add_argument("--dry-run", action="store_true", help="Mostrar a prévia da migração sem gravar arquivos")
+    parser.add_argument("--migration-review", metavar="JSON", help="Classificação do agente para as fontes inventariadas")
     args = parser.parse_args(argv)
+    if args.project is None and (args.dry_run or args.migration_review is not None):
+        parser.error("--dry-run e --migration-review exigem --project")
     try:
         if args.project is not None:
+            from harness.config import read_json
             from harness.project_update import update_project
 
-            result = update_project(args.project)
+            review = read_json(args.migration_review) if args.migration_review is not None else None
+            result = update_project(args.project, dry_run=args.dry_run, review=review)
             print(json.dumps(result, ensure_ascii=False, indent=2))
-            print("Atualização dos controles do projeto concluída.")
+            return 0 if args.dry_run or result["status"] == "complete" else 3
         else:
             update_app()
         return 0

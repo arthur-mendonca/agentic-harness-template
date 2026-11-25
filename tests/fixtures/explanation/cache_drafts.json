@@ -1,0 +1,20 @@
+{
+  "drafts": [
+    {
+      "id": "CACHE-A",
+      "text": "ProfileService em cache_after.py agora mantém dados sempre atualizados com TTL automático, cache compartilhado entre processos e proteção contra corridas. Qualquer alteração no banco invalida o perfil e os testes comprovaram redução da latência em produção."
+    },
+    {
+      "id": "CACHE-B",
+      "text": "ProfileService usa somente user_id como chave global e invalida o cache antes de chamar update_profile no store, inclusive quando a escrita falha. Isso permite reutilizar o perfil entre tenants sem leituras adicionais."
+    },
+    {
+      "id": "CACHE-C",
+      "text": "Antes, cache_before.py consultava o store a cada leitura. Em cache_after.py, ProfileService.read_profile usa a chave (tenant_id, user_id) no dicionário da instância; uma falta consulta o store e leituras seguintes usam o valor guardado. A cópia retornada é rasa, suficiente para os perfis planos deste pedido, sem garantir independência de valores aninhados. update_profile escreve primeiro no store e só após sucesso remove a chave afetada; erro propaga e mantém a entrada em cache, sem provar rollback no store. O cache não tem TTL nem limite de tamanho, não é compartilhado entre instâncias/processos e não tem locks. Alterações externas podem deixar valores obsoletos; faltas simultâneas podem repetir leituras e uma leitura concorrente à escrita pode repor dado antigo. O benefício esperado é reduzir leituras repetidas da mesma chave, ao custo de memória e dessa política de invalidação. Testes com store falso verificaram contagem, separação por tenant, cópia de dicionário plano e sucesso/falha de escrita; não mediram latência nem concorrência real. Inspecione a chave, dict(self._cache[key]) e a ordem entre escrita e pop. Na simulação informada pelo pedido, a revisão independente do código e da explicação não foi realizada por indisponibilidade de revisor."
+    },
+    {
+      "id": "CACHE-D",
+      "text": "ProfileService.read_profile retorna dict(self._cache[key]), portanto faz cópia profunda de todos os valores aninhados e protege o cache de qualquer mutação feita por consumidores ou pelo store. O cache fica sempre coerente com o store sem precisar de nova leitura. Revisão independente não realizada nesta simulação."
+    }
+  ]
+}
