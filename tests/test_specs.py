@@ -123,11 +123,12 @@ class SpecificationTests(unittest.TestCase):
         self.write_contract()
         self.invoke("review-policy", self.id, "optional", "--reason", "Explicit fixture waiver", "--decided-by", "test project")
         self.assertIn("sdd verify", self.invoke("set-status", self.id, "completed", code=2))
-        assessment = self.root / "assessment.json"
+        assessment = self.root / ".harness/assessment.json"
         assessment.write_text(json.dumps({
             "contract": self.invoke("verify", self.id, code=1)["contract"],
+            "source_snapshot": self.invoke("verify", self.id, code=1)["source_snapshot"],
             "criteria": {"AC-001": {"status": "met", "reason": "Conferi o rótulo nas duas resoluções.",
-                                    "evidence": [{"file": evidence}]}},
+                                    "evidence": [{"file": evidence, "limitation": "Manual fixture observation"}]}},
             "review": {"status": "not_performed", "reason": "Revisor indisponível"},
         }), encoding="utf-8")
         self.invoke("verify", self.id, "--assessment", str(assessment))

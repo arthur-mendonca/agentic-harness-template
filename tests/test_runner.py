@@ -7,10 +7,12 @@ import subprocess
 import sys
 import time
 import unittest
+from unittest.mock import patch
 
 from harness import __version__
 from harness.config import ConfigError, discover_root
 from harness.runner import main, run
+from harness.source_snapshot import capture
 from tests.helpers import directory_link, temporary_project
 
 
@@ -143,6 +145,42 @@ class RunnerTests(unittest.TestCase):
         second = self.execute(["ok"])[2]
         self.assertNotEqual(first, second)
         self.assertTrue(first.is_file())
+
+    def test_interruption_preserves_partial_output_and_stops_remaining_checks(self):
+        self.data["checks"] = {name: self.command("print('check output')")
+                               for name in ("before", "interrupted", "after")}
+        original_popen = subprocess.Popen
+        snapshot = capture(self.root)
+        launches = 0
+
+        def interrupt_second(*args, **kwargs):
+            nonlocal launches
+            process = original_popen(*args, **kwargs)
+            if kwargs.get("shell") is not False:
+                return process
+            launches += 1
+            if launches == 2:
+                original_wait = process.wait
+
+                def interrupted_wait(*args, **kwargs):
+                    original_wait(*args, **kwargs)
+                    process.wait = original_wait
+                    raise KeyboardInterrupt
+
+                process.wait = interrupted_wait
+            return process
+
+        # Only wrap the check launcher; source snapshots also invoke Git.
+        with patch("harness.runner.subprocess.Popen", side_effect=interrupt_second):
+            with patch("harness.runner.capture", return_value=snapshot):
+                report, code, path = self.execute(["before", "interrupted", "after"])
+        self.assertEqual(code, 130)
+        self.assertEqual(launches, 2)
+        self.assertEqual([report["checks"][name]["status"] for name in self.data["checks"]],
+                         ["passed", "interrupted", "not_run"])
+        self.assertIn("check output", report["checks"]["interrupted"]["stdout"])
+        self.assertEqual(json.loads(path.read_bytes()), report)
+        self.assertIn("interrupted", path.with_suffix(".log").read_text(encoding="utf-8"))
 
     def test_empty_and_space_arguments_are_preserved(self):
         command = [sys.executable, "-c", "import sys; print(repr(sys.argv[1:]))", "", " "]

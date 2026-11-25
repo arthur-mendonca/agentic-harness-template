@@ -103,9 +103,10 @@ class FindingStore:
 
     def _read(self, name):
         path = local_path(self.root, name)
-        text = path.read_bytes().decode('utf-8') if path.exists() else PROJECT_FILES[name]
+        original = path.read_bytes() if path.exists() else None
+        text = original.decode('utf-8') if original is not None else PROJECT_FILES[name]
         _blocks(text)
-        return text
+        return text, original
 
     def _guard(self, git, names):
         for name in names:
@@ -128,7 +129,8 @@ class FindingStore:
         key = sha256((data['component'] + '\0' + data['problem']).encode('utf-8')).hexdigest()
         identifier, memory_id = 'PEN-' + key[:16], 'PROB-' + key[:16]
         # A leitura prévia evita criar até o lock diante de conflitos de caminho ou encoding.
-        texts = {name: self._read(name) for name in (PENDING, MEMORY)}
+        snapshots = {name: self._read(name) for name in (PENDING, MEMORY)}
+        texts = {name: text for name, (text, _) in snapshots.items()}
         if data['state'] in ('resolvido', 'descartado') and not any(key in _blocks(text) for text in texts.values()):
             return {'status': 'ignored', 'reason': 'Already closed discovery without an existing entry to update'}
         persistent = data.get('persistent', False) or key in _blocks(texts[MEMORY])
@@ -136,7 +138,8 @@ class FindingStore:
         self._guard(ProjectGit(self.root), names)
         with project_lock(self.root):
             git = ProjectGit(self.root)
-            texts = {name: self._read(name) for name in (PENDING, MEMORY)}
+            snapshots = {name: self._read(name) for name in (PENDING, MEMORY)}
+            texts = {name: text for name, (text, _) in snapshots.items()}
             persistent = data.get('persistent', False) or key in _blocks(texts[MEMORY])
             names = [PENDING, PROJECT_LOCK] + ([MEMORY] if persistent else [])
             self._guard(git, names)
@@ -149,8 +152,8 @@ class FindingStore:
                        ('Descrição', data['description']), *[('Evidência', item) for item in evidence],
                        ('Impacto', data['impact'])]
             for label, field in (('Benefício', 'benefit'), ('Trade-off', 'tradeoff'), ('Confirmação', 'confirmation')):
-                if data[field]:
-                    details.append((label, data[field]))
+                values = _values(old, label) if field not in finding else [data[field]]
+                details.extend((label, value) for value in _unique(values) if value)
             tail = [('Ação proposta', data['action']), *[('Tarefa de origem', item) for item in origins]]
 
             def block(title, fields):
@@ -171,7 +174,11 @@ class FindingStore:
                 raise ConfigError('Git index changed during the finding operation; retry')
             # Memória primeiro: se a referência falhar, repetir a operação recompõe a pendência.
             for name in changed:
-                atomic_write(local_path(self.root, name), updates[name].encode('utf-8'))
+                path = local_path(self.root, name)
+                current = path.read_bytes() if path.exists() else None
+                if current != snapshots[name][1]:
+                    raise ConfigError(f'Finding document changed during recording; retry: {name}')
+                atomic_write(path, updates[name].encode('utf-8'))
             status = ('updated' if any(previous) else 'created') if changed else 'unchanged'
             return {'status': status, 'id': identifier,
                     'memory_id': memory_id if persistent else None, 'paths': changed}

@@ -5,6 +5,7 @@ import re
 
 from harness.config import ConfigError, decode_json
 from harness.project_storage import local_path
+from harness.source_snapshot import capture, changes, validate_snapshot
 
 STATES = ("met", "divergent", "unverified", "blocked")
 REVIEW_STATES = ("passed", "findings", "not_performed", "blocked")
@@ -18,7 +19,7 @@ def validate_review_policy(policy):
     return policy
 
 
-def _review_provenance(root, review, contract, expected, hashes):
+def _review_provenance(root, review, contract, expected, hashes, source):
     if not _text(review.get("draft")):
         raise ConfigError("Passed review requires the exact explanation draft")
     provenance = review.get("provenance")
@@ -28,12 +29,16 @@ def _review_provenance(root, review, contract, expected, hashes):
     evidence = Evidence(root)
     for scope, entry in provenance.items():
         fields = {"reviewer", "scope", "contract", "revision", "artifact"}
+        if scope == "code":
+            fields.add("source_sha256")
         if scope == "explanation":
             fields.add("draft_sha256")
         if (not isinstance(entry, dict) or entry.keys() != fields
                 or not all(_text(entry.get(key)) for key in ("reviewer", "scope", "revision", "artifact"))
                 or entry["contract"] != contract):
             raise ConfigError(f"Invalid {scope} review provenance or contract")
+        if scope == "code" and (source is None or entry["source_sha256"] != source["sha256"]):
+            raise ConfigError("Code review source fingerprint no longer matches current source")
         if scope == "explanation" and entry["draft_sha256"] != draft_hash:
             raise ConfigError("Explanation draft changed since independent review")
         name, digest, _ = evidence.inspect({"file": entry["artifact"]})
@@ -90,10 +95,10 @@ def _check_result(report, name):
     if not isinstance(selected, list) or not isinstance(item, dict):
         raise ConfigError(f"Check {name} is missing or invalid in the report")
     status = item.get("status")
-    if (status not in ("passed", "failed", "timeout", "unconfigured", "not_run", "not_applicable")
+    if (status not in ("passed", "failed", "timeout", "interrupted", "unconfigured", "not_run", "not_applicable")
             or item.get("selected") is not (name in selected)):
         raise ConfigError(f"Check {name} has an invalid result in the report")
-    if status in ("passed", "failed", "timeout") and name not in selected:
+    if status in ("passed", "failed", "timeout", "interrupted") and name not in selected:
         raise ConfigError(f"Check {name} was not selected in the report")
     if status == "passed" and (type(item.get("returncode")) is not int or item["returncode"] != 0):
         raise ConfigError(f"Check {name} has an invalid passing return code")
@@ -103,8 +108,9 @@ def _check_result(report, name):
 
 
 class Evidence:
-    def __init__(self, root):
+    def __init__(self, root, source=None):
         self.root = root
+        self.source = source
         self.files = {}
         self.reports = {}
 
@@ -115,8 +121,25 @@ class Evidence:
                 self.reports[name] = read_check_report(self.root, name)
             report, digest = self.reports[name]
             result = _check_result(report, reference["check"])
-        elif _fields(reference, "file") and _text(reference["file"]):
+            if self.source is not None and result in ("passed", "failed", "timeout", "interrupted", "failed_to_start"):
+                item = report["checks"][reference["check"]]
+                try:
+                    snapshot = validate_snapshot(item.get("source_snapshot"))
+                except ConfigError:
+                    result = "source_stale"
+                else:
+                    if (item.get("source_stable") is not True or item.get("source_snapshot_error")
+                            or item.get("source_after_sha256") != snapshot["sha256"] or snapshot != self.source):
+                        result = "source_stale"
+        elif (isinstance(reference, dict) and {"file"} <= reference.keys()
+              and reference.keys() <= {"file", "source_sha256", "limitation"} and _text(reference["file"])):
             name = reference["file"]
+            if self.source is not None:
+                if "source_sha256" in reference:
+                    if reference["source_sha256"] != self.source["sha256"]:
+                        raise ConfigError(f"Manual evidence source changed: {name}")
+                elif not _text(reference.get("limitation")):
+                    raise ConfigError("Manual evidence requires source_sha256 or an explicit limitation")
             if name not in self.files:
                 with manual_evidence_path(self.root, name).open("rb") as stream:
                     self.files[name] = file_digest(stream, "sha256").hexdigest()
@@ -145,14 +168,14 @@ def _assess(criterion, evidence, expected, hashes):
     results = {item["result"] for item in references}
     status = criterion["status"]
     reason = criterion["reason"]
-    blockers = {"timeout", "unconfigured", "failed_to_start"}
-    if "stale" in results:
-        status, reason = "unverified", "Refresh the changed or missing evidence"
+    blockers = {"timeout", "interrupted", "unconfigured", "failed_to_start"}
+    if results & {"stale", "source_stale"}:
+        status, reason = "unverified", "Refresh the changed, missing or source-incompatible evidence"
     elif status == "met" and "failed" in results:
         status, reason = "divergent", "A linked check failed"
     elif status == "met" or (status == "divergent" and not results & {"passed", "failed", "manual"}):
         if results & blockers:
-            status, reason = "blocked", "A linked check timed out, could not start or lacks configuration"
+            status, reason = "blocked", "A linked check timed out, was interrupted, could not start or lacks configuration"
         elif not results or results - {"passed", "manual"}:
             status, reason = "unverified", "Supply results of the linked verifications"
     return {"status": status, "reason": reason, "evidence": references}
@@ -164,17 +187,36 @@ def evaluate(root, trace, contract, assessment=None, *, recording=False, review_
                 for requirement in trace["requirements"] for entry in requirement["criteria"]}
     review = {"status": "not_performed", "reason": "No current independent review recorded"}
     policy = validate_review_policy(DEFAULT_REVIEW_POLICY if review_policy is None else review_policy)
+    source, source_error, source_changes = None, None, []
+    try:
+        source = capture(root)
+    except ConfigError as exc:
+        source_error = str(exc)
     hashes = {}
     valid = trace["valid"]
     awaiting = trace["spec_status"] == "awaiting_decision"
     if recording and (not valid or awaiting):
         raise ConfigError("The contract must be valid and clear of pending decisions; run sdd validate")
-    if recording and (not _fields(assessment, "contract", "criteria", "review")):
-        raise ConfigError("Assessment requires contract, criteria and review")
+    if recording and (not _fields(assessment, "contract", "criteria", "review", "source_snapshot")):
+        raise ConfigError("Assessment requires contract, criteria, review and source_snapshot from sdd verify")
     if recording and assessment["contract"] != contract:
         raise ConfigError("Contract changed; assess the revision shown by sdd verify")
     current = (valid and not awaiting and isinstance(assessment, dict) and not assessment.get("superseded")
                and assessment.get("contract") == contract)
+    if current:
+        try:
+            recorded_source = validate_snapshot(assessment.get("source_snapshot"))
+            if source is None:
+                raise ConfigError(source_error or "Source scope could not be inspected")
+            source_changes = changes(recorded_source, source)
+            if recorded_source != source:
+                raise ConfigError("Source changed since assessment: " + ", ".join(source_changes))
+        except ConfigError as exc:
+            if recording:
+                raise
+            source_error, current = str(exc), False
+    if recording and source is None:
+        raise ConfigError(source_error or "Source scope could not be inspected")
     if current:
         entries, review = assessment.get("criteria"), assessment.get("review")
         if not isinstance(entries, dict):
@@ -190,12 +232,12 @@ def evaluate(root, trace, contract, assessment=None, *, recording=False, review_
             raise ConfigError("Missing assessment evidence hashes")
         if review["status"] == "passed":
             try:
-                _review_provenance(root, review, contract, expected, hashes)
+                _review_provenance(root, review, contract, expected, hashes, source)
             except (ConfigError, OSError) as exc:
                 if recording:
                     raise
                 review = {"status": "blocked", "reason": str(exc)}
-        evidence = Evidence(root)
+        evidence = Evidence(root, source)
         for identifier, criterion in entries.items():
             if (not _fields(criterion, "status", "reason", "evidence") or criterion["status"] not in STATES
                     or not _text(criterion["reason"]) or not isinstance(criterion["evidence"], list)):
@@ -203,12 +245,25 @@ def evaluate(root, trace, contract, assessment=None, *, recording=False, review_
             if criterion["status"] == "divergent" and not criterion["evidence"]:
                 raise ConfigError(f"{identifier} requires evidence of the divergence")
             criteria[identifier] = _assess(criterion, evidence, expected, hashes)
+    if source is not None:
+        try:
+            after = capture(root)
+            if after != source:
+                source_changes = changes(source, after)
+                raise ConfigError("Source changed during assessment: " + ", ".join(source_changes))
+        except ConfigError as exc:
+            if recording:
+                raise
+            source_error, current = str(exc), False
     unmet = [identifier for identifier, item in criteria.items() if item["status"] != "met"]
     return {
         "ready": bool(current and criteria and not unmet and not trace["pending_tasks"]
                       and (review["status"] == "passed" or
                            (policy["mode"] == "optional" and review["status"] == "not_performed"))),
         "assessment_current": current,
+        "source_snapshot": source,
+        "source_changes": source_changes,
+        "source_error": source_error,
         "contract": contract,
         "spec_status": trace["spec_status"],
         "diagnostics": trace["diagnostics"],

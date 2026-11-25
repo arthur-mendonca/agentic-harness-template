@@ -111,6 +111,23 @@ class FindingTests(unittest.TestCase):
         self.assertIn('Estado: resolvido', self.pending())
         self.assertEqual(self.memory().count('## PROB-'), 1)
 
+    def test_resolving_keeps_confirmation_unless_explicitly_cleared(self):
+        for persistent in (False, True):
+            with self.subTest(persistent=persistent):
+                fields = {'persistent': persistent, 'problem': f'confirmed-{persistent}'}
+                confirmation = f'Teste reproduziu as chamadas; persistente={persistent}.'
+                first = self.record(self.finding(**fields, state='confirmado', confirmation=confirmation))
+                result = self.record(self.finding(**fields, state='resolvido'))
+                self.assertEqual(result['id'], first['id'])
+                document = self.memory() if persistent else self.pending()
+                self.assertIn('- Confirmação: ' + confirmation, document)
+                if persistent:
+                    self.assertNotIn(confirmation, self.pending())
+                self.assertEqual(self.record(self.finding(**fields, state='resolvido'))['status'], 'unchanged')
+                self.record(self.finding(**fields, state='resolvido', confirmation=''))
+                document = self.memory() if persistent else self.pending()
+                self.assertNotIn(confirmation, document)
+
     def test_promotion_preserves_evidence_and_origin_without_copying_description(self):
         original = self.finding()
         first = self.record(original)
@@ -227,3 +244,53 @@ class FindingTests(unittest.TestCase):
         self.record(self.finding(persistent=True))
         self.assertEqual(self.memory().count('## PROB-'), 1)
         self.assertEqual(self.pending().count('## PEN-'), 1)
+
+    def test_concurrent_document_edit_is_preserved_and_retry_reconciles_reference(self):
+        from harness.project_storage import atomic_write
+        self.record(self.finding(persistent=True))
+        path = self.root / '.harness/pendencias.md'
+        manual_note = '\nA equipe pediu preservar esta decisão para discussão.\n'
+        application = self.source.read_bytes()
+
+        def edit_pending_after_memory(path_to_write, data):
+            atomic_write(path_to_write, data)
+            if path_to_write.name == 'problemas-conhecidos.md':
+                with path.open('ab') as stream:
+                    stream.write(manual_note.encode('utf-8'))
+
+        changed = self.finding(persistent=True, state='aguardando avaliação')
+        with patch('harness.findings.atomic_write', side_effect=edit_pending_after_memory):
+            with self.assertRaisesRegex(ConfigError, 'changed'):
+                self.record(changed)
+        self.assertIn(manual_note, self.pending())
+        self.record(changed)
+        self.assertIn(manual_note, self.pending())
+        self.assertIn('Estado: aguardando avaliação', self.pending())
+        self.assertEqual(self.memory().count('## PROB-'), 1)
+        self.assertEqual(self.pending().count('## PEN-'), 1)
+        self.assertEqual(self.source.read_bytes(), application)
+
+    def test_concurrent_reference_creation_or_deletion_is_detected(self):
+        from harness.project_storage import atomic_write
+        path = self.root / '.harness/pendencias.md'
+        for action in ('create', 'delete'):
+            with self.subTest(action=action):
+                def change_reference_after_memory(path_to_write, data):
+                    atomic_write(path_to_write, data)
+                    if path_to_write.name == 'problemas-conhecidos.md':
+                        if action == 'create':
+                            path.write_bytes(b'# Created by another editor\n')
+                        else:
+                            path.unlink()
+
+                finding = self.finding(persistent=True, origin=f'task-{action}')
+                with patch('harness.findings.atomic_write', side_effect=change_reference_after_memory):
+                    with self.assertRaisesRegex(ConfigError, 'changed'):
+                        self.record(finding)
+                if action == 'create':
+                    self.assertEqual(path.read_bytes(), b'# Created by another editor\n')
+                else:
+                    self.assertFalse(path.exists())
+                self.record(finding)
+                self.assertEqual(self.memory().count('## PROB-'), 1)
+                self.assertEqual(self.pending().count('## PEN-'), 1)

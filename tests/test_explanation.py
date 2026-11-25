@@ -11,11 +11,11 @@ from tests.helpers import temporary_project
 FIXTURES = Path(__file__).parent / 'fixtures' / 'explanation'
 
 
-def load_example(name):
+def load_example(name, function='calculateBestDistance'):
     spec = importlib.util.spec_from_file_location('explanation_' + name, FIXTURES / (name + '.py'))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.calculateBestDistance
+    return getattr(module, function)
 
 
 class ExplanationScenarioTests(unittest.TestCase):
@@ -63,3 +63,86 @@ class ExplanationScenarioTests(unittest.TestCase):
             source = Path(__file__).resolve().parents[1] / 'skills/verified-development/SKILL.md'
             self.assertEqual(installed.read_text(encoding='utf-8'), source.read_text(encoding='utf-8'))
             self.assertEqual({path.name for path in installed.parent.iterdir()}, {'SKILL.md'})
+
+
+class SQLExplanationScenarioTests(unittest.TestCase):
+    def setUp(self):
+        self.orders = [{'id': 3, 'customer_id': 7}, {'id': 1, 'customer_id': 7}, {'id': 2, 'customer_id': 8}]
+        self.customers = {7: {'id': 7, 'email': 'a@example.test'}, 8: {'id': 8, 'email': 'b@example.test'}}
+        self.db = Mock()
+        self.db.fetch_orders.return_value = self.orders
+        self.db.fetch_customer.side_effect = self.customers.__getitem__
+        self.db.fetch_customers.return_value = list(self.customers.values())
+
+    def test_batch_replaces_n_plus_one_and_preserves_order_and_duplicate_customers(self):
+        expected = [(3, 'a@example.test'), (1, 'a@example.test'), (2, 'b@example.test')]
+        before = load_example('sql_before', 'load_order_emails')
+        after = load_example('sql_after', 'load_order_emails')
+        self.assertEqual(before(self.db, [3, 1, 2]), expected)
+        self.assertEqual(self.db.mock_calls, [call.fetch_orders([3, 1, 2]), call.fetch_customer(7),
+                                             call.fetch_customer(7), call.fetch_customer(8)])
+        self.db.reset_mock()
+        self.assertEqual(after(self.db, [3, 1, 2]), expected)
+        self.assertEqual(self.db.mock_calls, [call.fetch_orders([3, 1, 2]), call.fetch_customers([7, 8])])
+
+    def test_empty_result_makes_only_the_order_query(self):
+        self.db.fetch_orders.return_value = []
+        self.assertEqual(load_example('sql_after', 'load_order_emails')(self.db, []), [])
+        self.assertEqual(self.db.mock_calls, [call.fetch_orders([])])
+
+    def test_missing_customer_still_propagates_an_error(self):
+        self.db.fetch_customers.return_value = [self.customers[7]]
+        with self.assertRaises(KeyError):
+            load_example('sql_after', 'load_order_emails')(self.db, [3, 1, 2])
+        self.assertEqual(self.db.mock_calls, [call.fetch_orders([3, 1, 2]), call.fetch_customers([7, 8])])
+
+
+class CacheExplanationScenarioTests(unittest.TestCase):
+    def setUp(self):
+        self.store = Mock()
+        self.store.fetch_profile.return_value = {'name': 'original'}
+        self.service = load_example('cache_after', 'ProfileService')(self.store)
+
+    def test_repeated_read_is_cached_and_flat_returned_dict_is_not_shared(self):
+        before = load_example('cache_before', 'ProfileService')(self.store)
+        before.read_profile('tenant-a', 7)
+        before.read_profile('tenant-a', 7)
+        self.assertEqual(self.store.fetch_profile.call_count, 2)
+        self.store.reset_mock()
+        first = self.service.read_profile('tenant-a', 7)
+        first['name'] = 'caller edit'
+        self.assertEqual(self.service.read_profile('tenant-a', 7), {'name': 'original'})
+        self.store.fetch_profile.assert_called_once_with('tenant-a', 7)
+
+    def test_tenants_with_the_same_user_id_have_separate_entries(self):
+        self.store.fetch_profile.side_effect = [{'name': 'a'}, {'name': 'b'}]
+        self.assertEqual(self.service.read_profile('tenant-a', 7), {'name': 'a'})
+        self.assertEqual(self.service.read_profile('tenant-b', 7), {'name': 'b'})
+        self.assertEqual(self.service.read_profile('tenant-a', 7), {'name': 'a'})
+        self.assertEqual(self.store.fetch_profile.call_count, 2)
+
+    def test_successful_update_invalidates_only_the_affected_key(self):
+        self.service.read_profile('tenant-a', 7)
+        self.service.read_profile('tenant-b', 7)
+        self.service.update_profile('tenant-a', 7, {'name': 'changed'})
+        self.store.fetch_profile.return_value = {'name': 'changed'}
+        self.assertEqual(self.service.read_profile('tenant-a', 7), {'name': 'changed'})
+        self.assertEqual(self.service.read_profile('tenant-b', 7), {'name': 'original'})
+        self.assertEqual(self.store.fetch_profile.call_count, 3)
+        self.store.update_profile.assert_called_once_with('tenant-a', 7, {'name': 'changed'})
+
+    def test_failed_update_propagates_and_keeps_the_cached_value(self):
+        self.service.read_profile('tenant-a', 7)
+        self.store.update_profile.side_effect = RuntimeError('write failed')
+        with self.assertRaisesRegex(RuntimeError, 'write failed'):
+            self.service.update_profile('tenant-a', 7, {'name': 'changed'})
+        self.assertEqual(self.service.read_profile('tenant-a', 7), {'name': 'original'})
+        self.assertEqual(self.store.fetch_profile.call_count, 1)
+
+    def test_external_update_stays_stale_and_instances_do_not_share_cache(self):
+        self.service.read_profile('tenant-a', 7)
+        self.store.fetch_profile.return_value = {'name': 'external change'}
+        self.assertEqual(self.service.read_profile('tenant-a', 7), {'name': 'original'})
+        other = load_example('cache_after', 'ProfileService')(self.store)
+        self.assertEqual(other.read_profile('tenant-a', 7), {'name': 'external change'})
+        self.assertEqual(self.store.fetch_profile.call_count, 2)

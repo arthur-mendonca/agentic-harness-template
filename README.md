@@ -145,7 +145,7 @@ python -m harness sdd verify 001 --assessment CAMINHO_DO_JSON
 python -m harness sdd set-status 001 completed
 ```
 
-Depois de comparar o diff e os resultados com o contrato, o agente registra a avaliação em um JSON temporário. Copie em `contract` os três hashes exibidos por `sdd verify` e substitua o caminho ilustrativo pelo JSON emitido pelo runner.
+Depois de comparar o diff e os resultados com o contrato, o agente registra a avaliação em um JSON temporário dentro de `.harness/`, para não confundi-lo com código-fonte. Copie em `contract` os três hashes exibidos por `sdd verify`, em `source_snapshot` o objeto completo exibido pelo mesmo comando e substitua o caminho ilustrativo pelo JSON emitido pelo runner.
 
 ```json
 {
@@ -154,6 +154,7 @@ Depois de comparar o diff e os resultados com o contrato, o agente registra a av
     "plan.md": "<SHA-256 exibido pelo CLI>",
     "tasks.md": "<SHA-256 exibido pelo CLI>"
   },
+  "source_snapshot": "<substitua pelo objeto completo exibido por verify>",
   "criteria": {
     "AC-001": {
       "status": "met",
@@ -165,7 +166,7 @@ Depois de comparar o diff e os resultados com o contrato, o agente registra a av
 }
 ```
 
-Em `criteria`, use `met` (atendido), `divergent` (divergente), `unverified` (não verificado) ou `blocked` (bloqueado). Para evidência manual, use `{"file":"CAMINHO_RELATIVO"}` com procedimento e resultado observado. Em `review`, use `passed`, `findings`, `not_performed` ou `blocked`, com justificativa. Em `full`, a política padrão é `required`: ausência ou impedimento da revisão bloqueia `verified` e `completed`, inclusive com checks verdes e `--evidence`. A indisponibilidade do revisor não concede dispensa.
+Em `criteria`, use `met` (atendido), `divergent` (divergente), `unverified` (não verificado) ou `blocked` (bloqueado). Para evidência manual, use `{"file":"CAMINHO_RELATIVO","source_sha256":"FINGERPRINT_EXIBIDO_POR_VERIFY"}` com procedimento e resultado observado; quando o vínculo manual ao código não puder ser comprovado, forneça `limitation` com a limitação explícita em vez de `source_sha256`. Isso declara a limitação, sem provar o resultado observado. Em `review`, use `passed`, `findings`, `not_performed` ou `blocked`, com justificativa. Em `full`, a política padrão é `required`: ausência ou impedimento da revisão bloqueia `verified` e `completed`, inclusive com checks verdes e `--evidence`. A indisponibilidade do revisor não concede dispensa.
 
 A política é por tarefa e fica no `meta.json` existente. Somente uma decisão explícita com identificação e motivo permite ausência justificada; por exemplo, antes de registrar a avaliação do exemplo acima:
 
@@ -177,11 +178,21 @@ python -m harness sdd review-policy 001 optional --reason "Dispensa autorizada p
 
 Para `review.status: passed`, forneça também `draft` com o texto exato da minuta e `provenance` com duas entradas, `code` e `explanation`. Cada entrada exige `reviewer` (agente/processo/revisor identificado), `scope` (escopo examinado), `revision` (identificação do diff/código examinado), `contract` (o objeto de hashes mostrado por `verify`) e `artifact` (arquivo local existente com o resultado da revisão). A entrada `explanation` exige ainda `draft_sha256`, SHA-256 dos bytes UTF-8 exatos de `draft`, fornecido para a minuta revisada. O mesmo revisor independente pode cobrir ambos os escopos, mas a aprovação de código sozinha não aprova a explicação. Não há `explanation.md` ou `review-report.md` obrigatório; use artefatos existentes e o JSON da avaliação.
 
-O executor valida campos, contrato, fingerprint da minuta e hashes dos artefatos, reavaliados nas consultas e antes da conclusão. Minuta ou artefato alterado exige nova revisão pertinente. A identidade, independência real do revisor e a correspondência entre `revision` declarado e código-fonte não são comprovadas automaticamente; dependem de avaliação externa. O vínculo automático ao estado do código é tratado separadamente. Registros antigos sem proveniência permanecem preservados, mas não satisfazem revisão `passed` atual.
+O executor valida campos, contrato, fingerprint da minuta e hashes dos artefatos, reavaliados nas consultas e antes da conclusão. Minuta ou artefato alterado exige nova revisão pertinente. `provenance.code` exige também `source_sha256` com o fingerprint do código examinado mostrado por `verify`; a string `revision` sozinha não vincula a revisão ao código. A identidade, independência real do revisor e a afirmação de que ele examinou esse estado não são comprovadas automaticamente; dependem de avaliação externa. Registros antigos sem proveniência ou snapshot permanecem preservados, mas não satisfazem a avaliação atual.
 
-`verify` retorna código 0 quando a tarefa está apta à conclusão, 1 quando falta verificação ou há impedimentos e 2 para erro de uso ou entrada inválida. Uma avaliação válida pode ser gravada com código 1. Cada vínculo consulta o check indicado no relatório, inclusive quando a mesma execução contém resultados diferentes. Checks não executados, não configurados ou inaplicáveis deixam o critério em aberto. A referência ao relatório indica qual check foi executado. Cabe ao agente e ao revisor confirmar o que ele cobre no código.
+`verify` retorna código 0 quando a tarefa está apta à conclusão, 1 quando falta verificação ou há impedimentos e 2 para erro de uso ou entrada inválida. Uma avaliação válida pode ser gravada com código 1. Cada vínculo consulta o check indicado no relatório, inclusive quando a mesma execução contém resultados diferentes. Checks não executados, não configurados ou inaplicáveis deixam o critério em aberto. Interromper um comando no runner preserva JSON/log, saída parcial e checks anteriores, registra `interrupted`, deixa os checks seguintes configurados como `not_run` e retorna 130. O check interrompido bloqueia seu critério até nova verificação. A referência ao relatório indica qual check foi executado. Cabe ao agente e ao revisor confirmar o que ele cobre no código.
 
 Para concluir, todos os critérios precisam de avaliação atual com evidência, os passos devem estar concluídos e a revisão deve estar livre de impedimentos. Alterações nos documentos ou nas evidências vinculadas invalidam a conclusão até nova avaliação. Depois de mudar a implementação, reexecute os checks afetados e atualize a avaliação.
+
+### Snapshot do código e validade das evidências
+
+O snapshot `project-files-v1` contém manifesto `{caminho relativo: SHA-256 do conteúdo}`, entradas do índice Git (modo e objeto staged) e SHA-256 agregado canônico. Não copia código nem exige commit. Inclui arquivos novos, desconhecidos ou ignorados pelo Git, configuração do harness e conteúdo staged/unstaged; exclusão e renomeação alteram o manifesto. Sem Git, usa o mesmo escopo de arquivos com índice vazio. Não aceita listas de inclusão/exclusão fornecidas pela avaliação: ao registrar, compara o manifesto recebido com uma captura real completa.
+
+O escopo conservador cobre todo o projeto porque o executor não infere com segurança dependências entre arquivos. Não percorre diretórios `.git`, `.harness`, `node_modules`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.tox`, `.nox`, `.venv`, `venv`, `build`, `dist`, `target`, `coverage` ou com sufixo `.egg-info`. Arquivos regulares com nomes de diretórios gerados, como um script `build`, continuam incluídos no manifesto e no índice; `.git` e `.harness` são controles excluídos em qualquer forma. `.harness/harness.json` é exceção incluída como configuração de execução. Essas pastas são consideradas controles, dependências instaladas ou saídas geradas; fontes reais mantidas nelas ficam fora da garantia e devem ser organizadas no escopo de fontes antes de confiar na avaliação. Não há descoberta automática de dependências externas ao projeto. Logs de build e resultados não relacionados nessas pastas não invalidam a conclusão; a evidência vinculada continua protegida por seu hash individual. Guarde avaliações e artefatos de revisão em `.harness/` para evitar ciclos de hash; não são excluídos tipos genéricos como `.txt` ou `.json`.
+
+Cada check executado registra snapshot antes, fingerprint depois, `source_stable` e caminhos alterados. `passed` e código de saída do comando descrevem o comando; somente um check com fonte estável, inspecionável e igual à fonte atual pode comprovar um critério. Checks anteriores a outro check que modifica fonte não se aplicam ao novo estado. Relatórios antigos sem snapshot deixam o critério sem verificação. Falha de leitura, link/junction no escopo, submódulo, conflito no índice ou mudança detectada durante a captura impedem afirmar validade; nenhum deles produz manifesto vazio aprovado. A leitura é em blocos, limitada a 100 mil arquivos; o manifesto não contém conteúdos.
+
+`status`, `list`, `resume` e `verify` recalculam o fingerprint, informam `source_changes`/`source_error` e sinalizam estados obsoletos, preservando a avaliação e conclusão anteriores no metadata. `verified`/`completed` recusam avaliações de outro estado. Como o escopo conservador não distingue dependências entre fontes, uma mudança dentro dele exige novos checks/revisão; saídas excluídas comprovadamente não relacionadas não exigem repetição. O mecanismo compara estados antes/depois, não observa continuamente o sistema: mudanças transitórias restauradas entre capturas e um revisor que declare falsamente ter visto um fingerprint não são comprovados pelo Python.
 
 ### Explicação técnica e revisão antes do encerramento
 
@@ -191,7 +202,9 @@ O revisor independente recebe requisitos, diff atual incluindo arquivos novos, t
 
 Sem revisor, a revisão da explicação fica `não realizada`, conforme a política de bloqueio ou dispensa da tarefa. A revisão do próprio implementador não é independente. Em `full`, a avaliação inclui a proveniência separada de código e explicação e o fingerprint da minuta revisada antes de concluir. O Python não julga a qualidade ou fidelidade da explicação.
 
-Os cenários reproduzíveis de qualidade ficam em `tests/fixtures/explanation/`, com comportamento observado por `python -B -m unittest tests.test_explanation -v`. Esses testes conferem contagem, condições e falhas com cliente falso; a avaliação independente das minutas verifica seu significado e não é substituída por busca de palavras em Markdown.
+Os cenários reproduzíveis de qualidade ficam em `tests/fixtures/explanation/`, com comportamento observado por `python -B -m unittest tests.test_explanation -v`. Os testes cobrem chamadas de API condicionais, troca de 1+N leituras por uma busca de pedidos e um lote de clientes (apenas uma leitura se não houver pedidos), e cache por tenant/usuário com invalidação após escrita bem-sucedida. Clientes e stores são falsos: contagens, ordem, retorno e falhas não comprovam latência, faturamento, plano SQL ou segurança concorrente em produção.
+
+O protocolo `tests/fixtures/explanation/evaluate.md` avalia geração e revisão em contextos independentes com a skill instalada em uma cópia isolada. O gerador recebe requisitos, fontes, testes e resultados; os rascunhos adversariais ficam disponíveis somente ao revisor. O responsável inspeciona respostas, diffs e evidências, registrando em `.harness/` identidade disponível do agente/modelo, prompts, hashes dos inputs, checks e julgamentos separados. Verificar palavras em Markdown não substitui julgamento semântico, e uma avaliação finita não garante o comportamento de sessões futuras.
 
 ## Instalação principal: pacote Python compartilhado
 
@@ -318,6 +331,10 @@ Para registrar uma descoberta fora do escopo selecionada pelo agente, salve um J
 Use arquivos e observações reais do consumidor. `line` é opcional em cada evidência. Campos textuais ocupam uma linha. Categorias: `problema`, `risco`, `melhoria sugerida`; estados: `observado`, `hipótese`, `confirmado`, `aguardando avaliação`, `resolvido`, `descartado`. Uma sugestão exige também `benefit` específico e `tradeoff`; `confirmado` exige `confirmation` com reprodução ou verificação realizada. Sem evidência, impacto ou justificativas exigidas, o resultado é `ignored` e nenhum registro é criado. Warnings transitórios, erros corrigidos e sugestões genéricas devem ser descartados pelo agente (`relevant: false`). A seleção semântica continua responsabilidade do agente; o comando não verifica a veracidade do relato.
 
 O par normalizado `component` + `problem` determina o ID estável `PEN-...`. Repita esses valores para atualizar o estado, reunir evidências e preservar tarefas de origem; repetir o mesmo registro resulta em `unchanged`. Antes de registrar, compare o significado das entradas existentes: a ferramenta não reconhece sinônimos. Atualize registros manuais ou migrados no lugar, preservando o ID, sem criar cópia pelo comando. Preserve os marcadores dos blocos administrados.
+
+Ao resolver ou descartar um registro confirmado, omita `confirmation` para manter a reprodução ou verificação anterior. Se informar o campo, o valor substitui o relato; `""` o remove quando o estado permitir. O relato preservado não confirma novamente o problema nem transforma uma observação em regra de negócio.
+
+Antes de gravar cada documento, o comando compara seus bytes e sua existência com a leitura usada para preparar a atualização. Edição, criação ou exclusão concorrente detectada interrompe a operação sem sobrescrever aquele documento. Releia o conteúdo e concilie o achado antes de repetir; a memória pode já ter sido gravada e a repetição recompõe a referência. O lock serializa operações do harness; a comparação é otimista e não garante transação com editores externos entre a última comparação e a substituição do arquivo.
 
 Com `persistent: true`, a descrição e as evidências ficam somente na memória de problemas, em `PROB-...`; a pendência mantém referência, estado, categoria, ação e origem. Uma entrada promovida continua na memória nas atualizações seguintes. A memória é escrita antes da referência; em falha parcial, repetir o comando recompõe a referência sem duplicar o problema. Arquivos personalizados são preservados, arquivos rastreados e links são recusados, e um projeto Git precisa da proteção local preparada pela migração. Em `off` não há gravação. O comando apenas registra descobertas, sem aplicar sugestões ou editar a aplicação.
 

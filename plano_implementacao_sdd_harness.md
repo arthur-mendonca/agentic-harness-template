@@ -224,6 +224,8 @@ $sdd-off Corrija este texto sem criar documentos.
 
 **Status** · Implementada e verificada com 146 testes no Windows com Python 3.14, incluindo instalação por wheel. Revisão independente concluída sem findings P0–P2 pendentes.
 
+**Continuação (25/11/2026)** · Preservada a integração existente e reforçada a validade das evidências com snapshots de código. Interrupções durante comandos preservam JSON/log e saída parcial, retornam 130 e bloqueiam o critério afetado; checks seguintes configurados ficam como `not_run`. Arquivos regulares chamados `build`, `dist` ou `target` permanecem no snapshot. A skill coordenadora usa `source_snapshot` e vínculos manuais explícitos. Revisão independente da continuação concluída após corrigir um finding P2; resultados das execuções ficam em `.harness/results/`. O timeout do check de testes deste repositório passou de 120 para 600 segundos após a suíte exceder o limite anterior; configurações de consumidores são preservadas.
+
 **Objetivo:** comparar a implementação ao comportamento contratado, identificar lacunas e corrigir divergências sem mascarar falhas.
 
 **Arquivos prováveis:** `harness/convergence.py`, `harness/traceability.py`, `harness/runner.py` e `skills/verified-development/SKILL.md`; testes `test_convergence.py`.
@@ -247,6 +249,8 @@ $sdd-off Corrija este texto sem criar documentos.
 
 **Status** · Implementada e verificada com 166 testes no Windows com Python 3.14, incluindo instalação por wheel e execução por cópia. Revisão independente concluída sem findings P0–P2 pendentes. A seleção semântica e a veracidade dos achados continuam sob responsabilidade do agente.
 
+**Continuação (25/11/2026)** · Reforçada a preservação de confirmação anterior ao resolver ou descartar registros, mantendo o ID e evitando duplicar a descrição de problemas persistentes. A gravação compara conteúdo e existência de cada documento com a leitura original, detectando alterações concorrentes antes de sobrescrevê-lo; uma falha parcial mantém a retomada por repetição após conciliar o conteúdo. A comparação é otimista, sem transação com editores externos. Modelo, README e skill coordenadora descrevem esses comportamentos. Evidências da validação e da revisão desta continuação ficam nos artefatos locais de `.harness/`.
+
 **Objetivo:** capturar oportunidades relevantes descobertas durante o trabalho, preservando o escopo.
 
 **Arquivos prováveis:** `harness/findings.py`, modelos em `harness/project.py`, integração na skill `verified-development`, testes `test_findings.py`.
@@ -268,6 +272,8 @@ $sdd-off Corrija este texto sem criar documentos.
 ### ETAPA 8 — Explicação técnica pós-implementação e verificação pelo revisor
 
 **Status** · Implementada e verificada com 171 testes no Windows com Python 3.14. Avaliações independentes reais com a skill instalada produziram uma explicação fiel e revisaram cinco minutas: quatro retornaram para correção e a fiel foi aceita. Revisão independente do diff e da minuta de entrega concluída sem findings P0–P2. Os testes Python validam o cenário executável; o julgamento semântico permanece com o agente e o revisor, sem garantia de sessões futuras.
+
+**Continuação (25/11/2026)** · Ampliado o protocolo com cenários executáveis de SQL em lote e cache por tenant, além das consultas condicionais à API. Os testes estabelecem comportamento de referência com clientes falsos, separados da avaliação de explicações. Geração e revisão recebem a skill atual instalada em cópia isolada, em contextos independentes; os rascunhos ficam ocultos do gerador. Prompts, hashes, diffs, resultados e julgamentos desta continuação são preservados localmente em `.harness/stage-8-followup/`, sem documentos de explicação obrigatórios nos consumidores nem garantia de desempenho de agentes em sessões futuras.
 
 **Objetivo:** fornecer ao desenvolvedor uma explicação útil do código gerado, sem exigir leitura integral do diff.
 

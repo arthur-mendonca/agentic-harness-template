@@ -83,11 +83,11 @@ def exercise_modes(root):
     (root / '.harness/harness.json').write_text(json.dumps(config), encoding='utf-8')
     report, code, path = run(root, ['acceptance'])
     assert code == 0 and report['checks']['acceptance']['status'] == 'passed'
-    assessment = {'contract': contract, 'criteria': {'AC-001': {
+    assessment = {'source_snapshot': invoke(root, ['sdd', 'verify', '002'], code=1)['source_snapshot'], 'contract': contract, 'criteria': {'AC-001': {
         'status': 'met', 'reason': 'acceptance reads and asserts the requested text.',
         'evidence': [{'report': path.relative_to(root).as_posix(), 'check': 'acceptance'}]}},
         'review': {'status': 'not_performed', 'reason': 'Optional independent review unavailable in this deterministic smoke test.'}}
-    assessment_path = root / 'assessment.json'
+    assessment_path = root / '.harness/assessment.json'
     assessment_path.write_text(json.dumps(assessment), encoding='utf-8')
     assert invoke(root, ['sdd', 'verify', '002', '--assessment', str(assessment_path)])['ready']
     assert invoke(root, ['sdd', 'set-status', '002', 'completed'])['status'] == 'completed'

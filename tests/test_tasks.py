@@ -162,11 +162,12 @@ class TaskTests(unittest.TestCase):
             (self.root / promoted["path"] / name).write_bytes(content.encode("utf-8"))
         contract = self.invoke("verify", task["id"], exit_code=1)["contract"]
         self.invoke("review-policy", task["id"], "optional", "--reason", "Explicit fixture waiver", "--decided-by", "test project")
-        assessment = self.root / "assessment.json"
+        assessment = self.root / ".harness/assessment.json"
         assessment.write_text(json.dumps({
             "contract": contract,
+            "source_snapshot": self.invoke("verify", task["id"], exit_code=1)["source_snapshot"],
             "criteria": {"AC-001": {"status": "met", "reason": "Conferi o rótulo nas duas resoluções.",
-                                    "evidence": [{"file": promoted["manual_evidence"][0]}]}},
+                                    "evidence": [{"file": promoted["manual_evidence"][0], "limitation": "Manual fixture observation"}]}},
             "review": {"status": "not_performed", "reason": "Revisor indisponível"},
         }), encoding="utf-8")
         self.invoke("verify", task["id"], "--assessment", str(assessment))

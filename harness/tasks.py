@@ -186,6 +186,7 @@ class TaskStore:
 
     def _result(self, folder, meta):
         result = {**meta, "path": f"{TASKS}/{folder}"}
+        report = None
         if _layout(meta) == "full":
             result.update(review_policy=meta.get("review_policy", DEFAULT_REVIEW_POLICY))
             try:
@@ -194,15 +195,17 @@ class TaskStore:
                 result.update(review={"status": "blocked", "reason": str(exc)}, review_waived=False,
                               independence_verification="Review could not be evaluated")
             else:
-                result.update({key: report[key] for key in ("review", "review_waived", "independence_verification")})
+                result.update({key: report[key] for key in ("review", "review_waived", "independence_verification",
+                                                           "source_snapshot", "source_changes", "source_error")})
         else:
             result["review"] = {"status": "not_performed", "reason": "Formal independent review is not recorded in lite/off"}
         if _layout(meta) == "full":
             result["spec_status"] = self._spec_status(folder, meta)
-            if meta["status"] == "completed" and not self._completion_current(folder, meta):
+            if meta["status"] == "completed" and not (report and report["ready"]
+                                                       and meta.get("full_completion") == report["contract"]):
                 result.update(status="in_progress", verification="unverified", completion_stale=True)
             elif (meta["status"] == "verified"
-                  and self._verified_contract(folder, meta) is None):
+                  and not (report and report["ready"])):
                 result.update(status="in_progress", verification="unverified")
         return result
 

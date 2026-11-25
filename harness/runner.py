@@ -14,6 +14,7 @@ import uuid
 
 from harness import __version__
 from harness.config import ConfigError, contained_path, discover_root, load_config
+from harness.source_snapshot import capture, changes
 
 
 def _terminate(process):
@@ -59,6 +60,10 @@ def _execute(root, check, work):
             except subprocess.TimeoutExpired:
                 result["status"] = "timeout"
                 _terminate(process)
+            except KeyboardInterrupt:
+                result["status"] = "interrupted"
+                result["reason"] = "Check interrupted; remaining checks were not executed"
+                _terminate(process)
             except BaseException:
                 _terminate(process)
                 raise
@@ -91,22 +96,43 @@ def run(project=None, checks=None):
               "selected": selected, "checks": {}}
     try:
         order = selected + [name for name in config["checks"] if name not in selected]
+        interrupted = False
         for name in order:
             check = config["checks"][name]
             if check["state"] != "configured":
                 result = {"status": check["state"], "reason": check["reason"], "returncode": None,
                           "stdout": "", "stderr": "", "duration_seconds": 0.0}
-            elif name not in selected:
-                result = {"status": "not_run", "reason": "Check was not selected", "returncode": None,
+            elif name not in selected or interrupted:
+                reason = "Run interrupted before this check" if name in selected else "Check was not selected"
+                result = {"status": "not_run", "reason": reason, "returncode": None,
                           "stdout": "", "stderr": "", "duration_seconds": 0.0}
             else:
+                before = None
+                snapshot_error = None
+                try:
+                    before = capture(root)
+                except ConfigError as exc:
+                    snapshot_error = str(exc)
                 result = _execute(root, check, work)
+                interrupted = result["status"] == "interrupted"
+                result["source_snapshot"] = before
+                result["source_stable"] = False
+                try:
+                    after = capture(root)
+                    if before is not None:
+                        result["source_changes"] = changes(before, after)
+                        result["source_after_sha256"] = after["sha256"]
+                        result["source_stable"] = before == after
+                except ConfigError as exc:
+                    snapshot_error = str(exc)
+                if snapshot_error:
+                    result["source_snapshot_error"] = snapshot_error
             result["selected"] = name in selected
             report["checks"][name] = result
     finally:
         work.rmdir()
     statuses = [report["checks"][name]["status"] for name in selected]
-    code = 1 if any(s in ("failed", "timeout") for s in statuses) else (
+    code = 130 if "interrupted" in statuses else 1 if any(s in ("failed", "timeout") for s in statuses) else (
         3 if not selected or "unconfigured" in statuses else 0)
     report["exit_code"] = code
     report["finished_at"] = datetime.now(timezone.utc).isoformat()
@@ -119,6 +145,10 @@ def run(project=None, checks=None):
             lines.append(f"command={json.dumps(item['command'], ensure_ascii=False)} cwd={item['cwd']}")
         if item.get("reason"):
             lines.append(item["reason"])
+        if "source_stable" in item:
+            lines.append(f"Source applicable: {item['source_stable']}; changes={item.get('source_changes', [])}")
+        if item.get("source_snapshot_error"):
+            lines.append(item["source_snapshot_error"])
         lines.extend(["stdout:", item["stdout"], "stderr:", item["stderr"]])
     lines.append(f"\nExit code: {code}")
     path.with_suffix(".log").write_text("\n".join(lines) + "\n", encoding="utf-8")

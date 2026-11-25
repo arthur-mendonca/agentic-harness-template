@@ -1,0 +1,16 @@
+{
+  "drafts": [
+    {
+      "id": "SQL-A",
+      "text": "load_order_emails ficou mais escalável com a organização das consultas. Os testes passaram e a alteração está pronta para produção."
+    },
+    {
+      "id": "SQL-B",
+      "text": "load_order_emails em sql_after.py faz sempre duas consultas, mesmo sem pedidos, e usa uma transação para garantir um snapshot consistente. O benchmark confirmou redução de 80% na latência sem custo de memória adicional."
+    },
+    {
+      "id": "SQL-C",
+      "text": "Antes, sql_before.py fazia uma leitura de pedidos e N leituras de cliente para N pedidos bem-sucedidos. Em sql_after.py, load_order_emails lê pedidos, deduplica os IDs de cliente e faz uma busca em lote; com pedidos e sucesso, são duas operações na fronteira do adaptador. Sem pedidos, há apenas a leitura inicial. A montagem do resultado mantém a ordem de orders e pedidos distintos do mesmo cliente; cliente ausente no lote provoca KeyError. O mapa custa memória proporcional aos clientes carregados e o lote deve ser inspecionado para os limites do banco real. Não há cache nem transação acrescentados, portanto não se provou consistência entre as duas leituras. Os testes usam adaptador falso; contagens e resultados foram verificados, mas latência, plano SQL e memória em produção não foram medidos. Inspecione customer_ids, a construção de customers e a montagem final. Na simulação informada pelo pedido, a revisão independente do código e da explicação não foi realizada por indisponibilidade de revisor."
+    }
+  ]
+}
